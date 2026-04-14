@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DraftIt</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <span class="header-logo">📦 DraftIt</span>
+    <button id="logout-btn" class="btn-ghost">Logout</button>
+  </header>
+
+  <!-- eBay connection banner -->
+  <div id="ebay-banner" class="ebay-banner" style="display:none">
+    <span id="ebay-banner-text"></span>
+    <a id="ebay-connect-link" href="/ebay/connect" class="btn-connect" style="display:none">Connect eBay</a>
+  </div>
+
+  <!-- ─── STEP 1: Upload ─────────────────────────────────── -->
+  <main id="step-upload">
+    <div class="card">
+      <h2>New Listing</h2>
+
+      <label class="photo-drop" id="photo-label">
+        <input type="file" id="photo-input" accept="image/*,.heic,.heif" multiple style="display:none">
+        <div id="photo-placeholder">
+          <span class="upload-icon">📷</span>
+          <span>Tap to add photos</span>
+          <span class="upload-hint">Select multiple from camera or gallery</span>
+        </div>
+        <div id="photo-preview" class="photo-grid" style="display:none"></div>
+      </label>
+
+      <textarea
+        id="description"
+        placeholder="Optional: any notes about the item (brand, model, what's wrong with it, etc.)"
+        rows="3"
+      ></textarea>
+
+      <div class="ship-row">
+        <div class="field-group">
+          <label>Est. Weight</label>
+          <select id="item-weight">
+            <option value="">Not sure</option>
+            <option value="under 1 lb">Under 1 lb</option>
+            <option value="1-2 lbs">1–2 lbs</option>
+            <option value="2-5 lbs">2–5 lbs</option>
+            <option value="5-10 lbs">5–10 lbs</option>
+            <option value="10-20 lbs">10–20 lbs</option>
+            <option value="over 20 lbs">Over 20 lbs</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Item Size</label>
+          <select id="item-size">
+            <option value="">Not sure</option>
+            <option value="fits in a shoebox">Fits in shoebox</option>
+            <option value="fits in a small flat rate box">Small flat rate box</option>
+            <option value="fits in a medium flat rate box">Medium flat rate box</option>
+            <option value="large or bulky">Large / bulky</option>
+            <option value="furniture or freight">Furniture / freight</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="generate-error" class="error-msg" style="display:none"></div>
+
+      <button id="generate-btn" class="btn-primary" disabled>
+        Generate Listing
+      </button>
+    </div>
+  </main>
+
+  <!-- ─── STEP 2: Review ────────────────────────────────── -->
+  <main id="step-review" style="display:none">
+
+    <!-- eBay-style preview bar -->
+    <div class="ebay-preview-bar">
+      <span>eBay Listing Preview</span>
+      <button id="start-over-btn" class="btn-ghost-sm">Start Over</button>
+    </div>
+
+    <div class="ebay-listing-wrap">
+
+      <!-- Left: Photo Gallery -->
+      <div class="gallery-col">
+        <div class="main-photo-wrap">
+          <img id="gallery-main" src="" alt="Main photo">
+          <span class="main-label">MAIN PHOTO</span>
+        </div>
+        <div id="gallery-thumbs" class="gallery-thumbs"></div>
+        <p class="gallery-hint">Tap a photo to set as main</p>
+      </div>
+
+      <!-- Right: Listing Details -->
+      <div class="details-col">
+        <div class="field-group">
+          <label>Title</label>
+          <input type="text" id="r-title" maxlength="80">
+          <span id="title-count" class="char-count">0/80</span>
+        </div>
+
+        <div class="price-condition-row">
+          <div class="field-group">
+            <label>Price</label>
+            <div class="price-wrap">
+              <span class="price-sign">$</span>
+              <input type="number" id="r-price" min="0.99" step="0.01">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>Condition</label>
+            <select id="r-condition">
+              <option value="NEW">New</option>
+              <option value="LIKE_NEW">Like New</option>
+              <option value="USED_EXCELLENT">Used – Excellent</option>
+              <option value="USED_GOOD" selected>Used – Good</option>
+              <option value="USED_ACCEPTABLE">Used – Acceptable</option>
+              <option value="FOR_PARTS">For Parts</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Condition Note</label>
+          <input type="text" id="r-condition-note" maxlength="1000">
+        </div>
+
+        <div class="meta-pills">
+          <span class="pill">📦 <span id="r-category"></span></span>
+          <span class="pill">🚚 <span id="r-shipping"></span></span>
+        </div>
+        <div id="dimensions-note" class="dimensions-note" style="display:none"></div>
+
+        <div id="flat-rate-card" class="flat-rate-card" style="display:none">
+          <div class="flat-rate-top">
+            <span class="flat-rate-icon">📬</span>
+            <div class="flat-rate-info">
+              <span id="flat-rate-name"></span>
+              <span id="flat-rate-price" class="flat-rate-price"></span>
+            </div>
+            <span id="flat-rate-badge" class="flat-rate-badge" style="display:none">RECOMMENDED</span>
+          </div>
+          <p id="flat-rate-reason" class="flat-rate-reason"></p>
+        </div>
+
+        <div class="ebay-fake-btn">Buy It Now — Preview Only</div>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <div class="desc-section">
+      <div class="field-group">
+        <label>Description</label>
+        <textarea id="r-description" rows="7"></textarea>
+      </div>
+    </div>
+
+    <div class="save-section">
+      <div id="save-error" class="error-msg" style="display:none"></div>
+      <button id="save-btn" class="btn-primary">Save to eBay Drafts</button>
+    </div>
+
+  </main>
+
+  <!-- ─── STEP 3: Success ───────────────────────────────── -->
+  <main id="step-success" style="display:none">
+    <div class="card success-card">
+      <span class="success-icon">✅</span>
+      <h2>Saved to Drafts!</h2>
+      <p>Your listing is waiting in eBay as an unpublished draft. Nothing is live yet.</p>
+      <a href="https://www.ebay.com/sh/lst/drafts" target="_blank" class="btn-outline">
+        View in eBay Seller Hub
+      </a>
+      <button id="list-another-btn" class="btn-primary">
+        List Another Item
+      </button>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

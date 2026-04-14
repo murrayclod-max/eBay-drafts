@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DraftIt</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="logo">
+      <span class="logo-icon">📦</span>
+      <h1>DraftIt</h1>
+      <p>eBay listing creator</p>
+    </div>
+
+    <form id="login-form">
+      <div class="field">
+        <input
+          type="password"
+          id="password"
+          placeholder="Password"
+          autocomplete="current-password"
+          autofocus
+          required
+        >
+      </div>
+      <div id="login-error" class="error-msg" style="display:none"></div>
+      <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('login-btn');
+      const err = document.getElementById('login-error');
+      const password = document.getElementById('password').value;
+
+      btn.textContent = 'Signing in...';
+      btn.disabled = true;
+      err.style.display = 'none';
+
+      try {
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          window.location.href = '/app';
+        } else {
+          err.textContent = data.error || 'Wrong password';
+          err.style.display = 'block';
+          btn.textContent = 'Sign In';
+          btn.disabled = false;
+        }
+      } catch {
+        err.textContent = 'Connection error. Try again.';
+        err.style.display = 'block';
+        btn.textContent = 'Sign In';
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

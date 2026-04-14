@@ -1,0 +1,6 @@
+node_modules/
+.env
+ebay_tokens.json
+uploads/
+*.log
+.claude/
