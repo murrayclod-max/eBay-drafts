@@ -13,6 +13,19 @@ const sharp = require('sharp');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── eBay Environment (sandbox vs production) ────────────────────────────────
+const EBAY_ENV = (process.env.EBAY_ENV || 'production').toLowerCase();
+const EBAY_URLS = EBAY_ENV === 'sandbox' ? {
+  api: 'https://api.sandbox.ebay.com',
+  auth: 'https://auth.sandbox.ebay.com',
+  finding: 'https://svcs.sandbox.ebay.com',
+} : {
+  api: 'https://api.ebay.com',
+  auth: 'https://auth.ebay.com',
+  finding: 'https://svcs.ebay.com',
+};
+console.log(`eBay environment: ${EBAY_ENV}`);
+
 // File upload storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -28,6 +41,16 @@ const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 // Middleware
 app.use(express.json());
+
+// Hostname routing: thelazz.com serves the bracket at root
+app.use((req, res, next) => {
+  const host = (req.hostname || '').replace(/^www\./, '');
+  if (host === 'thelazz.com') {
+    // Serve lazz/ subfolder as the root for this domain
+    return express.static(path.join(__dirname, 'public', 'lazz'))(req, res, next);
+  }
+  next();
+});
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 app.use(session({
@@ -44,6 +67,97 @@ const requireAuth = (req, res, next) => {
   }
   res.redirect('/');
 };
+
+// ─── eBay Sold Listings Search ────────────────────────────────────────────────
+
+async function searchSoldListings(query, limit = 20) {
+  const clientId = process.env.EBAY_CLIENT_ID;
+  if (!clientId) return null;
+
+  try {
+    // Use eBay Finding API — findCompletedItems (sold listings)
+    const params = new URLSearchParams({
+      'OPERATION-NAME': 'findCompletedItems',
+      'SERVICE-VERSION': '1.13.0',
+      'SECURITY-APPNAME': clientId,
+      'RESPONSE-DATA-FORMAT': 'JSON',
+      'REST-PAYLOAD': '',
+      'keywords': query,
+      'itemFilter(0).name': 'SoldItemsOnly',
+      'itemFilter(0).value': 'true',
+      'itemFilter(1).name': 'ListingType',
+      'itemFilter(1).value(0)': 'FixedPrice',
+      'itemFilter(1).value(1)': 'AuctionWithBIN',
+      'itemFilter(1).value(2)': 'Auction',
+      'sortOrder': 'EndTimeSoonest',
+      'paginationInput.entriesPerPage': String(limit),
+    });
+
+    const res = await axios.get(
+      `${EBAY_URLS.finding}/services/search/FindingService/v1?${params}`
+    );
+
+    const root = res.data?.findCompletedItemsResponse?.[0];
+    if (!root || root.ack?.[0] !== 'Success') return null;
+
+    const items = root.searchResult?.[0]?.item || [];
+    return items.map(item => ({
+      title: item.title?.[0] || '',
+      price: parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0),
+      shippingCost: parseFloat(item.shippingInfo?.[0]?.shippingServiceCost?.[0]?.__value__ || 0),
+      totalPrice: parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0)
+                + parseFloat(item.shippingInfo?.[0]?.shippingServiceCost?.[0]?.__value__ || 0),
+      condition: item.condition?.[0]?.conditionDisplayName?.[0] || '',
+      listingType: item.listingInfo?.[0]?.listingType?.[0] || '',
+      endDate: item.listingInfo?.[0]?.endTime?.[0] || '',
+      url: item.viewItemURL?.[0] || '',
+      imageUrl: item.galleryURL?.[0] || '',
+    }));
+  } catch (err) {
+    console.error('eBay sold search error:', err.message);
+    return null;
+  }
+}
+
+function computeMarketStats(soldItems) {
+  if (!soldItems || !soldItems.length) return null;
+
+  const prices = soldItems.map(i => i.totalPrice).sort((a, b) => a - b);
+  const itemPrices = soldItems.map(i => i.price).sort((a, b) => a - b);
+
+  const sum = prices.reduce((a, b) => a + b, 0);
+  const avg = sum / prices.length;
+  const median = prices.length % 2 === 0
+    ? (prices[prices.length / 2 - 1] + prices[prices.length / 2]) / 2
+    : prices[Math.floor(prices.length / 2)];
+
+  // Low BIN = lowest fixed-price sold item (total with shipping)
+  const fixedPriceItems = soldItems.filter(i => i.listingType === 'FixedPrice' || i.listingType === 'AuctionWithBIN');
+  const lowBin = fixedPriceItems.length
+    ? Math.min(...fixedPriceItems.map(i => i.totalPrice))
+    : prices[0];
+
+  return {
+    count: prices.length,
+    low: prices[0],
+    high: prices[prices.length - 1],
+    average: Math.round(avg * 100) / 100,
+    median: Math.round(median * 100) / 100,
+    lowBuyItNow: Math.round(lowBin * 100) / 100,
+    priceRange: { low: prices[0], mid: Math.round(avg * 100) / 100, high: prices[prices.length - 1] },
+    recentSales: soldItems.slice(0, 8).map(i => ({
+      title: i.title,
+      price: i.price,
+      shippingCost: i.shippingCost,
+      totalPrice: i.totalPrice,
+      condition: i.condition,
+      listingType: i.listingType,
+      endDate: i.endDate,
+      url: i.url,
+      imageUrl: i.imageUrl,
+    })),
+  };
+}
 
 // ─── eBay Token Helpers ───────────────────────────────────────────────────────
 
@@ -68,7 +182,7 @@ async function getAccessToken() {
   // Refresh expired token
   try {
     const res = await axios.post(
-      'https://api.ebay.com/identity/v1/oauth2/token',
+      `${EBAY_URLS.api}/identity/v1/oauth2/token`,
       `grant_type=refresh_token&refresh_token=${encodeURIComponent(tokens.refresh_token)}`,
       {
         auth: { username: process.env.EBAY_CLIENT_ID, password: process.env.EBAY_CLIENT_SECRET },
@@ -128,7 +242,7 @@ app.get('/ebay/connect', requireAuth, (req, res) => {
     ].join(' '),
     prompt: 'login',
   });
-  res.redirect(`https://auth.ebay.com/oauth2/authorize?${params}`);
+  res.redirect(`${EBAY_URLS.auth}/oauth2/authorize?${params}`);
 });
 
 app.get('/ebay/callback', async (req, res) => {
@@ -137,7 +251,7 @@ app.get('/ebay/callback', async (req, res) => {
 
   try {
     const tokenRes = await axios.post(
-      'https://api.ebay.com/identity/v1/oauth2/token',
+      `${EBAY_URLS.api}/identity/v1/oauth2/token`,
       `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(process.env.EBAY_REDIRECT_URI)}`,
       {
         auth: { username: process.env.EBAY_CLIENT_ID, password: process.env.EBAY_CLIENT_SECRET },
@@ -161,7 +275,8 @@ app.post('/generate', requireAuth, upload.array('photos', 10), async (req, res) 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const content = [];
-    const { description, weight, size } = req.body;
+    const { description, weight, size, freeShipping } = req.body;
+    const isFreeShipping = freeShipping === 'true' || freeShipping === true;
 
     for (const photo of photos) {
       let imageBuffer = fs.readFileSync(photo.path);
@@ -195,23 +310,72 @@ app.post('/generate', requireAuth, upload.array('photos', 10), async (req, res) 
       });
     }
 
-    const shippingContext = [weight && `Weight: ${weight}`, size && `Size: ${size}`].filter(Boolean).join(', ');
+    const shippingContext = [
+      weight && `Weight: ${weight}`,
+      size && `Size: ${size}`,
+      isFreeShipping && 'Seller wants to offer FREE SHIPPING (build shipping cost into item price)',
+    ].filter(Boolean).join(', ');
+
+    // First pass: quick identification for eBay search
+    const idContent = [...content, {
+      type: 'text',
+      text: `Identify this item briefly. Respond with ONLY valid JSON:
+{"searchQuery": "optimized eBay search keywords for finding comparable sold listings"}`
+    }];
+
+    let marketContext = '';
+    let marketStats = null;
+    try {
+      const idRes = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: idContent }]
+      });
+      const idText = idRes.content[0].text.trim();
+      let parsed;
+      try { parsed = JSON.parse(idText); } catch { const m = idText.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); }
+
+      if (parsed?.searchQuery) {
+        const soldItems = await searchSoldListings(parsed.searchQuery);
+        marketStats = computeMarketStats(soldItems);
+        if (marketStats) {
+          marketContext = `\n\nMARKET DATA from recent eBay sold listings for "${parsed.searchQuery}":
+- ${marketStats.count} recent sales found
+- Price range: $${marketStats.low.toFixed(2)} – $${marketStats.high.toFixed(2)} (including shipping)
+- Average sold price: $${marketStats.average.toFixed(2)}
+- Median sold price: $${marketStats.median.toFixed(2)}
+- Lowest Buy It Now (with shipping): $${marketStats.lowBuyItNow.toFixed(2)}
+Recent sales: ${marketStats.recentSales.map(s => `"${s.title}" $${s.totalPrice.toFixed(2)}`).join('; ')}
+
+USE THIS DATA to set a competitive, realistic price. Your suggested price should be informed by these actual sales.`;
+        }
+      }
+    } catch (err) {
+      console.error('Market data lookup failed (non-fatal):', err.message);
+    }
 
     content.push({
       type: 'text',
       text: `You are an expert eBay seller with 20 years of experience maximizing sales.
-Analyze ${photos.length > 0 ? 'these photos' : 'this description'} and create an optimized eBay listing.${description ? `\nSeller notes: ${description}` : ''}${shippingContext ? `\nShipping info: ${shippingContext}` : ''}
+Analyze ${photos.length > 0 ? 'these photos' : 'this description'} and create an optimized eBay listing.${description ? `\nSeller notes: ${description}` : ''}${shippingContext ? `\nShipping info: ${shippingContext}` : ''}${marketContext}
 
 Use your knowledge to estimate the item's real-world weight and dimensions.
 
 USPS flat rate prices (2024):
-- Padded Flat Rate Envelope (12.5x9.5"): $10.45 — fits documents, small flat items under ~4 lbs
+- Flat Rate Envelope (12.5x9.5"): $10.10 — thin flat items, documents, soft goods under ~4 lbs
+- Padded Flat Rate Envelope (12.5x9.5"): $10.45 — small items needing protection, small electronics, jewelry
 - Small Flat Rate Box (8.625x5.375x1.625"): $11.15 — small dense items
 - Medium Flat Rate Box (11x8.5x5.5"): $17.10 — fits most shoe-box sized items
 - Large Flat Rate Box (12x12x5.5"): $22.10 — large heavy items
 USPS Ground Advantage typical rates: under 1lb ~$5, 1-2lb ~$8, 2-5lb ~$11, 5-10lb ~$14, 10-20lb ~$18
 
-Determine: does this item fit in any flat rate option? If so, compare that flat rate price vs estimated Ground Advantage cost. Flat rate is "recommended" when it's cheaper OR when the item is heavy enough that flat rate saves money.
+Determine: does this item fit in any flat rate option? Pick the CHEAPEST flat rate option the item fits in. If so, compare that flat rate price vs estimated Ground Advantage cost. Flat rate is "recommended" when it's cheaper OR when the item is heavy enough that flat rate saves money.
+
+${isFreeShipping ? `FREE SHIPPING MODE: The seller wants to offer free shipping. You MUST:
+1. Build the estimated shipping cost INTO the item price (price should be item value + shipping)
+2. Set shippingNote to "Free Shipping"
+3. Flat rate recommendation still applies — but the buyer won't see it (seller pays)
+4. In priceReasoning, mention that the price includes built-in shipping` : ''}
 
 Respond with ONLY valid JSON — no markdown, no code blocks, nothing else:
 {
@@ -219,9 +383,14 @@ Respond with ONLY valid JSON — no markdown, no code blocks, nothing else:
   "condition": "NEW" or "LIKE_NEW" or "USED_EXCELLENT" or "USED_GOOD" or "USED_ACCEPTABLE" or "FOR_PARTS",
   "conditionNote": "honest 1-sentence condition note",
   "price": <suggested price as a plain number>,
+  "priceLow": <quick-sale price>,
+  "priceHigh": <patient/optimistic price>,
+  "priceReasoning": "2-3 sentences explaining the price — reference comparable sales if market data was provided",
   "description": "compelling 3-paragraph description covering what it is, key features/specs, condition details and what's included",
   "categoryName": "specific eBay category (e.g. 'Vintage Cameras & Photo', 'Men's Coats & Jackets')",
-  "shippingNote": "best non-flat-rate option with cost range, e.g. 'USPS Ground Advantage, approx $8–11'",
+  "shippingNote": ${isFreeShipping ? '"Free Shipping"' : '"best non-flat-rate option with cost range, e.g. USPS Ground Advantage approx $8-11"'},
+  "freeShipping": ${isFreeShipping},
+  "shippingBuiltIn": ${isFreeShipping ? '<estimated shipping cost that was added to price, as a number>' : 'null'},
   "weightEstimate": one of exactly: "under 1 lb" or "1-2 lbs" or "2-5 lbs" or "5-10 lbs" or "10-20 lbs" or "over 20 lbs",
   "sizeEstimate": one of exactly: "fits in a shoebox" or "fits in a small flat rate box" or "fits in a medium flat rate box" or "large or bulky" or "furniture or freight",
   "dimensionsNote": "estimated dimensions and weight, e.g. '12 x 8 x 4 inches, approx 3 lbs'",
@@ -249,12 +418,148 @@ Respond with ONLY valid JSON — no markdown, no code blocks, nothing else:
     }
 
     listing.photoFiles = photos.map(p => p.filename);
+    listing.marketStats = marketStats;
     res.json(listing);
 
   } catch (err) {
     photos.forEach(p => { try { fs.unlinkSync(p.path); } catch {} });
     console.error('Generate error:', err.message);
     res.status(500).json({ error: err.message || 'Failed to generate listing' });
+  }
+});
+
+// ─── Valuate Only ────────────────────────────────────────────────────────────
+
+app.post('/valuate', requireAuth, upload.array('photos', 10), async (req, res) => {
+  const photos = req.files || [];
+
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const content = [];
+
+    for (const photo of photos) {
+      let imageBuffer = fs.readFileSync(photo.path);
+      let mimeType = photo.mimetype || 'image/jpeg';
+
+      const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif'
+        || photo.originalname.toLowerCase().endsWith('.heic')
+        || photo.originalname.toLowerCase().endsWith('.heif');
+
+      if (isHeic) {
+        const converted = await heicConvert({ buffer: imageBuffer, format: 'JPEG', quality: 0.85 });
+        imageBuffer = Buffer.from(converted);
+        mimeType = 'image/jpeg';
+      }
+
+      imageBuffer = await sharp(imageBuffer)
+        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+      mimeType = 'image/jpeg';
+
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mimeType, data: imageBuffer.toString('base64') }
+      });
+    }
+
+    const { description } = req.body;
+
+    // Step 1: Ask Claude to identify the item for search
+    content.push({
+      type: 'text',
+      text: `You are an expert eBay seller and appraiser. Identify this item from the photos${description ? ` and seller notes: "${description}"` : ''}.
+
+Respond with ONLY valid JSON:
+{
+  "itemName": "concise name for eBay search (e.g. 'Canon AE-1 35mm Film Camera')",
+  "searchQuery": "optimized eBay search keywords to find comparable sold listings",
+  "condition": "NEW" or "LIKE_NEW" or "USED_EXCELLENT" or "USED_GOOD" or "USED_ACCEPTABLE" or "FOR_PARTS",
+  "estimatedValue": <your best guess price as a number before seeing market data>,
+  "category": "eBay category name"
+}`
+    });
+
+    const identifyRes = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 500,
+      messages: [{ role: 'user', content }]
+    });
+
+    let identification;
+    const idText = identifyRes.content[0].text.trim();
+    try {
+      identification = JSON.parse(idText);
+    } catch {
+      const match = idText.match(/\{[\s\S]*\}/);
+      if (match) identification = JSON.parse(match[0]);
+      else throw new Error('Could not parse identification from Claude');
+    }
+
+    // Step 2: Search eBay sold listings
+    const soldItems = await searchSoldListings(identification.searchQuery);
+    const marketStats = computeMarketStats(soldItems);
+
+    // Step 3: Ask Claude to analyze market data and give final valuation
+    const valuationPrompt = [];
+    valuationPrompt.push({
+      type: 'text',
+      text: `You are an expert eBay seller and appraiser. You identified this item as: "${identification.itemName}" in ${identification.condition} condition.
+
+${marketStats ? `Here are recent eBay sold listings for comparable items:
+- ${marketStats.count} sales found
+- Price range: $${marketStats.low.toFixed(2)} – $${marketStats.high.toFixed(2)} (including shipping)
+- Average sold price: $${marketStats.average.toFixed(2)}
+- Median sold price: $${marketStats.median.toFixed(2)}
+- Lowest Buy It Now (with shipping): $${marketStats.lowBuyItNow.toFixed(2)}
+
+Recent comparable sales:
+${marketStats.recentSales.map(s => `• "${s.title}" — $${s.price.toFixed(2)} + $${s.shippingCost.toFixed(2)} shipping (${s.condition}, ${s.listingType})`).join('\n')}
+` : 'No eBay sold data available — provide your best estimate based on expertise.'}
+
+Based on ${marketStats ? 'the market data above and ' : ''}your expertise, provide a valuation.
+
+Respond with ONLY valid JSON:
+{
+  "itemName": "${identification.itemName}",
+  "category": "${identification.category}",
+  "condition": "${identification.condition}",
+  "priceLow": <conservative/quick-sale price>,
+  "priceMid": <fair market value>,
+  "priceHigh": <optimistic/patient seller price>,
+  "suggestedListPrice": <what you'd actually list it at>,
+  "reasoning": "2-3 sentences explaining the valuation — reference specific comparable sales if available, explain what drives the price range",
+  "tips": ["array of 2-3 short tips to maximize value on this specific item"],
+  "hasMarketData": ${!!marketStats}
+}`
+    });
+
+    const valuationRes = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      messages: [{ role: 'user', content: valuationPrompt }]
+    });
+
+    let valuation;
+    const valText = valuationRes.content[0].text.trim();
+    try {
+      valuation = JSON.parse(valText);
+    } catch {
+      const match = valText.match(/\{[\s\S]*\}/);
+      if (match) valuation = JSON.parse(match[0]);
+      else throw new Error('Could not parse valuation from Claude');
+    }
+
+    // Merge market stats into response
+    valuation.marketStats = marketStats;
+    valuation.photoFiles = photos.map(p => p.filename);
+
+    res.json(valuation);
+
+  } catch (err) {
+    photos.forEach(p => { try { fs.unlinkSync(p.path); } catch {} });
+    console.error('Valuate error:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to valuate item' });
   }
 });
 
@@ -287,7 +592,7 @@ app.post('/save-draft', requireAuth, async (req, res) => {
 
     // Step 1: Create inventory item
     await axios.put(
-      `https://api.ebay.com/sell/inventory/v1/inventory_item/${sku}`,
+      `${EBAY_URLS.api}/sell/inventory/v1/inventory_item/${sku}`,
       {
         product: {
           title,
@@ -305,7 +610,7 @@ app.post('/save-draft', requireAuth, async (req, res) => {
 
     // Step 2: Create unpublished offer (= draft listing)
     const offerRes = await axios.post(
-      'https://api.ebay.com/sell/inventory/v1/offer',
+      `${EBAY_URLS.api}/sell/inventory/v1/offer`,
       {
         sku,
         marketplaceId: 'EBAY_US',
