@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Lazz — Meadow Club</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --mc-green: #1a4d3a;
+    --mc-green-dark: #0f3527;
+    --mc-green-accent: #2d6b52;
+    --mc-gold: #b89968;
+    --mc-cream: #f8f6f1;
+    --mc-paper: #ffffff;
+    --mc-ink: #2b2b2b;
+    --mc-ink-soft: #595959;
+    --mc-rule: #d8d3c7;
+    --mc-rule-soft: #ebe7dc;
+    --mc-hover: #f4f1ea;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--mc-paper);
+    color: var(--mc-ink);
+    font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  /* ── HERO / HEADER ── */
+  .hero {
+    position: relative;
+    min-height: 340px;
+    background:
+      linear-gradient(to bottom, rgba(15,53,39,0.35), rgba(15,53,39,0.55)),
+      url('banner.jpg') center 45%/cover no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #fff;
+    padding: 100px 20px 120px;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.4);
+  }
+
+  .hero h1 {
+    font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+    font-weight: 500;
+    font-size: clamp(36px, 6vw, 62px);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+
+  .hero-sub {
+    margin-top: 18px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    font-weight: 400;
+    opacity: 0.9;
+  }
+
+  .hero-pennant {
+    position: absolute;
+    bottom: -1px; left: 50%; transform: translateX(-50%);
+    width: 42px; height: 22px;
+    background: var(--mc-paper);
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+  }
+
+  /* ── CHAMPION BANNER ── */
+  .champion-strip {
+    background: var(--mc-cream);
+    border-top: 1px solid var(--mc-rule);
+    border-bottom: 1px solid var(--mc-rule);
+    padding: 22px 20px;
+    text-align: center;
+  }
+  .champion-strip .label {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    color: var(--mc-ink-soft);
+  }
+  .champion-strip .name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(22px, 3.2vw, 32px);
+    font-weight: 500;
+    color: var(--mc-green);
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+  }
+  .champion-strip .name.tbd { color: var(--mc-ink-soft); font-style: italic; letter-spacing: 0.03em; }
+
+  /* ── MAIN ── */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  .section-head {
+    text-align: center;
+    margin-bottom: 36px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--mc-rule);
+  }
+  .section-head h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500;
+    font-size: clamp(28px, 4vw, 42px);
+    color: var(--mc-green);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .section-head .deck {
+    margin-top: 10px;
+    color: var(--mc-ink-soft);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  /* ── STATUS / CONTROLS ── */
+  .status-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .status-pill {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mc-ink-soft);
+    padding: 6px 14px;
+    border: 1px solid var(--mc-rule);
+    border-radius: 999px;
+    background: var(--mc-paper);
+  }
+  .status-pill.error { color: #a6392e; border-color: #e4b7b0; background: #faf1f0; }
+  .btn-refresh {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--mc-green);
+    padding: 6px 16px;
+    border: 1px solid var(--mc-green);
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-refresh:hover { background: var(--mc-green); color: #fff; }
+
+  /* ── BRACKET ── */
+  .bracket-wrap {
+    overflow-x: auto;
+    padding: 8px 4px 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bracket {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(220px, 1fr));
+    gap: 24px;
+    min-width: 1280px;
+    align-items: stretch;
+  }
+
+  .round {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 0;
+    position: relative;
+  }
+
+  .round-header {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--mc-green);
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--mc-rule);
+    margin-bottom: 14px;
+    font-weight: 500;
+  }
+
+  .round-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+  }
+
+  .match {
+    background: var(--mc-paper);
+    border: 1px solid var(--mc-rule);
+    border-radius: 2px;
+    margin: 6px 0;
+    transition: all 0.2s ease;
+    position: relative;
+  }
+  .match:hover { border-color: var(--mc-green-accent); box-shadow: 0 2px 12px rgba(26,77,58,0.08); }
+
+  .slot {
+    display: flex;
+    align-items: center;
+    padding: 9px 12px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--mc-ink);
+    border-bottom: 1px solid var(--mc-rule-soft);
+    min-height: 38px;
+    position: relative;
+  }
+  .slot:last-child { border-bottom: none; }
+  .slot.tbd { color: var(--mc-ink-soft); font-style: italic; }
+  .slot.winner {
+    background: linear-gradient(90deg, rgba(184,153,104,0.10) 0%, transparent 100%);
+    color: var(--mc-green-dark);
+    font-weight: 600;
+  }
+  .slot.winner::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--mc-gold);
+  }
+  .slot.loser { color: var(--mc-ink-soft); text-decoration: line-through; text-decoration-color: var(--mc-rule); }
+
+  .seed {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--mc-ink-soft);
+    letter-spacing: 0.1em;
+    width: 22px;
+    flex-shrink: 0;
+  }
+  .slot.winner .seed { color: var(--mc-gold); font-weight: 600; }
+
+  .team {
+    flex: 1;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .match-score {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    color: var(--mc-ink-soft);
+    letter-spacing: 0.1em;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+
+  /* Final column styling */
+  .round.final .match { border: 2px solid var(--mc-gold); }
+  .round.final .slot { padding: 14px 14px; font-size: 17px; }
+  .round.final .round-header { color: var(--mc-gold); border-color: var(--mc-gold); }
+
+  /* ── LOADING / EMPTY ── */
+  .loading, .error-box {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--mc-ink-soft);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-style: italic;
+  }
+  .error-box { color: #a6392e; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--mc-rule);
+    padding: 36px 20px;
+    text-align: center;
+    color: var(--mc-ink-soft);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-family: 'Montserrat', sans-serif;
+  }
+  footer .dot { margin: 0 10px; color: var(--mc-rule); }
+
+  /* ── ADMIN BAR ── */
+  .admin-bar {
+    background: var(--mc-green-dark);
+    color: #fff;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-bottom: 3px solid var(--mc-gold);
+  }
+  .admin-badge {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--mc-gold);
+    border: 1px solid var(--mc-gold);
+    padding: 4px 10px;
+    border-radius: 2px;
+  }
+  .admin-hint {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.75);
+    font-style: italic;
+  }
+  .admin-btn {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #fff;
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .admin-btn:hover { background: var(--mc-gold); color: var(--mc-green-dark); border-color: var(--mc-gold); }
+  .admin-btn.primary { background: var(--mc-gold); color: var(--mc-green-dark); border-color: var(--mc-gold); font-weight: 600; }
+  .admin-btn.primary:hover { background: #cba77a; border-color: #cba77a; }
+  .admin-btn.danger:hover { background: #8a2b22; border-color: #8a2b22; color: #fff; }
+
+  /* ── CLICKABLE SLOTS (admin mode) ── */
+  body.admin .slot.clickable {
+    cursor: pointer;
+  }
+  body.admin .slot.clickable:hover {
+    background: var(--mc-hover);
+  }
+  body.admin .slot.clickable.winner:hover {
+    background: linear-gradient(90deg, rgba(184,153,104,0.22) 0%, rgba(184,153,104,0.05) 100%);
+  }
+  body.admin .slot.tbd { cursor: not-allowed; opacity: 0.7; }
+
+  /* ── MODAL ── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,53,39,0.55);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    animation: fadeIn 0.15s ease-out;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-card {
+    background: var(--mc-paper);
+    border-radius: 3px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    padding: 32px 34px;
+    width: 100%;
+    max-width: 400px;
+    border-top: 3px solid var(--mc-gold);
+  }
+  .modal-card.wide { max-width: 560px; }
+  .modal-card h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 500;
+    font-size: 26px;
+    color: var(--mc-green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .modal-card p {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    color: var(--mc-ink-soft);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .modal-card p code {
+    background: var(--mc-cream);
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--mc-green-dark);
+  }
+  .modal-card input[type="text"],
+  .modal-card input[type="password"] {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 14px;
+    border: 1px solid var(--mc-rule);
+    border-radius: 2px;
+    background: var(--mc-paper);
+    color: var(--mc-ink);
+  }
+  .modal-card input:focus {
+    outline: none;
+    border-color: var(--mc-green);
+    box-shadow: 0 0 0 3px rgba(26,77,58,0.12);
+  }
+  .modal-card textarea {
+    width: 100%;
+    height: 200px;
+    padding: 12px 14px;
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    font-size: 13px;
+    border: 1px solid var(--mc-rule);
+    border-radius: 2px;
+    background: var(--mc-cream);
+    color: var(--mc-ink);
+    resize: vertical;
+    margin-bottom: 12px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
+  }
+  .modal-btn {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 9px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--mc-rule);
+    background: transparent;
+    color: var(--mc-ink-soft);
+  }
+  .modal-btn:hover { border-color: var(--mc-ink-soft); color: var(--mc-ink); }
+  .modal-btn.primary {
+    background: var(--mc-green);
+    color: #fff;
+    border-color: var(--mc-green);
+    font-weight: 500;
+  }
+  .modal-btn.primary:hover { background: var(--mc-green-dark); border-color: var(--mc-green-dark); }
+  .error-text {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12px;
+    color: #a6392e;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .admin-link {
+    color: inherit;
+    border-bottom: 1px dotted var(--mc-rule);
+    cursor: pointer;
+  }
+  .admin-link:hover { color: var(--mc-green); border-color: var(--mc-green); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 720px) {
+    .bracket-wrap { padding-bottom: 12px; }
+    .hero { min-height: 200px; padding: 60px 20px 80px; }
+    main { padding: 32px 16px 60px; }
+    .slot { font-size: 13px; padding: 8px 10px; min-height: 34px; }
+    .seed { width: 20px; font-size: 9px; }
+  }
+
+  /* Print (Pro Shop wants a hard copy) */
+  @media print {
+    .hero, footer, .status-bar, .champion-strip { background: #fff !important; color: #000 !important; }
+    .hero { min-height: 0; padding: 20px; }
+    .hero h1 { color: var(--mc-green); }
+    .bracket { min-width: 0; }
+    .bracket-wrap { overflow: visible; }
+    .btn-refresh { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="admin-bar" class="admin-bar" hidden>
+  <span class="admin-badge">Admin Mode</span>
+  <span class="admin-hint">Click a team to advance them. Click a winner to undo.</span>
+  <button class="admin-btn primary" id="admin-sync" type="button">Sync to Google Sheet</button>
+  <button class="admin-btn danger" id="admin-reset" type="button">Clear picks</button>
+  <button class="admin-btn" id="admin-logout" type="button">Logout</button>
+</div>
+
+<header class="hero">
+  <div>
+    <h1>The Lazz</h1>
+    <div class="hero-sub" id="hero-year">Meadow Club · Team Match Play</div>
+  </div>
+  <div class="hero-pennant"></div>
+</header>
+
+<section class="champion-strip">
+  <div class="label">Champion</div>
+  <div class="name tbd" id="champion-name">To Be Determined</div>
+</section>
+
+<main>
+  <div class="section-head">
+    <h2>Tournament Bracket</h2>
+    <div class="deck" id="subdeck">Single Elimination · 32 Teams</div>
+  </div>
+
+  <div class="status-bar">
+    <span class="status-pill" id="status-pill">Loading bracket…</span>
+    <button class="btn-refresh" id="refresh-btn" type="button">Refresh</button>
+  </div>
+
+  <div class="bracket-wrap">
+    <div class="bracket" id="bracket">
+      <div class="loading">Loading bracket…</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>Meadow Club</span>
+  <span class="dot">·</span>
+  <span id="last-updated">—</span>
+  <span class="dot">·</span>
+  <span>Est. 1927</span>
+  <span class="dot">·</span>
+  <span class="admin-link" id="admin-link">Pro Shop Login</span>
+</footer>
+
+<div id="login-modal" class="modal-backdrop" hidden>
+  <div class="modal-card">
+    <h3>Pro Shop Login</h3>
+    <form id="login-form">
+      <input type="text" id="login-user" placeholder="Username" autocomplete="username" required>
+      <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password" required>
+      <div id="login-error" class="error-text" hidden>Incorrect username or password</div>
+      <div class="modal-actions">
+        <button type="button" class="modal-btn" id="login-cancel">Cancel</button>
+        <button type="submit" class="modal-btn primary">Sign in</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="sync-modal" class="modal-backdrop" hidden>
+  <div class="modal-card wide">
+    <h3>Sync to Google Sheet</h3>
+    <p>Select all text below, copy it, then in your Google Sheet click cell <code>D34</code> and paste. This fills the <code>winner</code> column for all 31 matches at once.</p>
+    <textarea id="sync-textarea" readonly></textarea>
+    <div class="modal-actions">
+      <button type="button" class="modal-btn" id="sync-close">Close</button>
+      <button type="button" class="modal-btn primary" id="sync-copy">Copy to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   THE LAZZ — Bracket Renderer
+   Data source: a published Google Sheet (CSV).
+   Pro Shop edits the sheet; this page renders whatever the sheet says.
+   See SETUP.md for the sheet schema and publishing instructions.
+   ───────────────────────────────────────────────────────────── */
+
+// === CONFIG ===================================================
+// Paste the PUBLISHED CSV URL for the Google Sheet here.
+// File → Share → Publish to web → Comma-separated values (.csv)
+// If left blank, the page will render the hardcoded fallback bracket below.
+const SHEET_CSV_URL = "";
+
+// Tournament year & title (used in the hero). You can also override from the sheet via a "meta" row.
+const TOURNAMENT_TITLE = "The Lazz";
+const TOURNAMENT_YEAR = "2026";
+const TOURNAMENT_SUBTITLE = "Meadow Club · Team Match Play";
+
+// Round labels (left → right). 32-team bracket = 5 rounds.
+const ROUND_LABELS = ["Round of 32", "Round of 16", "Quarterfinals", "Semifinals", "Championship"];
+
+// 2026 roster. The Pro Shop can edit names via the Google Sheet; this is the offline fallback.
+const FALLBACK_TEAMS = [
+  { seed: 1,  name: "Koagedal / Porter" },
+  { seed: 2,  name: "Zerbe / Fradelizio" },
+  { seed: 3,  name: "Levine / Zlot" },
+  { seed: 4,  name: "Dowd / Bartsh" },
+  { seed: 5,  name: "Nelson II / Morgan" },
+  { seed: 6,  name: "De Surville / A. Ryan" },
+  { seed: 7,  name: "Herzog / Gordon" },
+  { seed: 8,  name: "Friedman / Pilger" },
+  { seed: 9,  name: "Lateef / P. Bjursten" },
+  { seed: 10, name: "Miller / M. Hyman" },
+  { seed: 11, name: "Zintak / Mortimer" },
+  { seed: 12, name: "Coduto / Ortiz" },
+  { seed: 13, name: "MacKay / Nutting" },
+  { seed: 14, name: "Hamill / Cussen" },
+  { seed: 15, name: "Mitchell / Levitan" },
+  { seed: 16, name: "Park / Solter" },
+  { seed: 17, name: "Wu / Tiret" },
+  { seed: 18, name: "Herbst / Eiseman" },
+  { seed: 19, name: "Tupper / Aanes" },
+  { seed: 20, name: "Cook / Cinelli" },
+  { seed: 21, name: "Mayeda / D. Thompson" },
+  { seed: 22, name: "Eesley / R. Gibson" },
+  { seed: 23, name: "Henderson / Rivers" },
+  { seed: 24, name: "Chang / Z. Hyman" },
+  { seed: 25, name: "Lance / Oppenheim" },
+  { seed: 26, name: "H. Klein / Ross" },
+  { seed: 27, name: "McKinley / Gottschalk" },
+  { seed: 28, name: "Tilney / Morrison" },
+  { seed: 29, name: "Dresser / Borden" },
+  { seed: 30, name: "Thornton / Fish" },
+  { seed: 31, name: "Russell / AbouKhater" },
+  { seed: 32, name: "Wheelock / Ferst" }
+];
+
+// === END CONFIG ===============================================
+
+// ── CSV PARSER (handles quoted fields) ────────────────────────
+function parseCSV(text) {
+  const rows = [];
+  let cur = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (inQuotes) {
+      if (c === '"' && n === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { cur.push(field); field = ''; }
+      else if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
+  return rows.filter(r => r.some(v => v && v.trim() !== ''));
+}
+
+function rowsToObjects(rows) {
+  if (!rows.length) return [];
+  const headers = rows[0].map(h => h.trim().toLowerCase());
+  return rows.slice(1).map(r => {
+    const o = {};
+    headers.forEach((h, i) => o[h] = (r[i] ?? '').trim());
+    return o;
+  });
+}
+
+// ── BRACKET MODEL ─────────────────────────────────────────────
+// Build a list of 31 matches from 32 teams (standard bracket seeding).
+// Round-of-32 pairings by seed: 1-16, 8-9, 4-13, 5-12, 2-15, 7-10, 3-14, 6-11
+// ... plus the 17-32 "play-in style" pairings when present. But standard
+// 32-team bracket: seeds are ordered so that 1 plays 32, 16 plays 17, etc.
+// (seed_i + seed_j = 33 on the first round). Your paper bracket uses this.
+
+// Order from the 2026 paper bracket (top → bottom).
+const R32_SEED_ORDER = [
+   1,32, 16,17,  9,24,  8,25,
+   4,29, 13,20, 12,21,  5,28,
+   2,31, 15,18, 10,23,  7,26,
+   3,30, 14,19, 11,22,  6,27
+];
+
+function buildInitialBracket(teams) {
+  const bySeed = {};
+  teams.forEach(t => { bySeed[t.seed] = t; });
+
+  const matches = [];
+  for (let i = 0; i < 32; i += 2) {
+    const a = bySeed[R32_SEED_ORDER[i]];
+    const b = bySeed[R32_SEED_ORDER[i+1]];
+    matches.push({
+      id: `M${matches.length+1}`,
+      round: 0,
+      top: a ? { seed: a.seed, name: a.name } : null,
+      bottom: b ? { seed: b.seed, name: b.name } : null,
+      winner: null,
+      score: ''
+    });
+  }
+  for (let r = 1; r <= 4; r++) {
+    const count = 16 / Math.pow(2, r);
+    for (let i = 0; i < count; i++) {
+      matches.push({
+        id: `M${matches.length+1}`,
+        round: r,
+        top: null,
+        bottom: null,
+        winner: null,
+        score: '',
+        feedTop: matches.length - count * 2 + (i * 2),
+        feedBottom: matches.length - count * 2 + (i * 2 + 1)
+      });
+    }
+  }
+  return matches;
+}
+
+// Resolve the whole bracket: sheet results provide match-level winners by slot ('top'/'bottom'),
+// admin overrides are by team seed (so they stay correct even if upstream changes). Admin wins conflicts.
+function resolveBracket(teams, sheetResults, adminSeedResults) {
+  const matches = buildInitialBracket(teams);
+  const sheetMap = {};
+  (sheetResults || []).forEach(r => {
+    if (r.match_id && (r.winner === 'top' || r.winner === 'bottom')) {
+      sheetMap[r.match_id] = { winner: r.winner, score: r.score || '' };
+    }
+  });
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (m.round > 0) {
+      const fT = matches[m.feedTop];
+      const fB = matches[m.feedBottom];
+      m.top = fT && fT.winner ? (fT.winner === 'top' ? fT.top : fT.bottom) : null;
+      m.bottom = fB && fB.winner ? (fB.winner === 'top' ? fB.top : fB.bottom) : null;
+    }
+
+    const adminSeed = adminSeedResults[m.id];
+    if (adminSeed != null) {
+      if (m.top && m.top.seed === adminSeed) { m.winner = 'top'; continue; }
+      if (m.bottom && m.bottom.seed === adminSeed) { m.winner = 'bottom'; continue; }
+    }
+    const sr = sheetMap[m.id];
+    if (sr) { m.winner = sr.winner; m.score = sr.score; }
+    else    { m.winner = null; m.score = ''; }
+  }
+  return { matches, sheetMap };
+}
+
+function getChampion(matches) {
+  const final = matches[matches.length - 1];
+  if (!final || !final.winner) return null;
+  return final.winner === 'top' ? final.top : final.bottom;
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function render(matches) {
+  const root = document.getElementById('bracket');
+  root.innerHTML = '';
+
+  const byRound = [[], [], [], [], []];
+  matches.forEach(m => byRound[m.round].push(m));
+
+  byRound.forEach((roundMatches, rIdx) => {
+    const col = document.createElement('div');
+    col.className = 'round' + (rIdx === 4 ? ' final' : '');
+
+    const h = document.createElement('div');
+    h.className = 'round-header';
+    h.textContent = ROUND_LABELS[rIdx] || `Round ${rIdx+1}`;
+    col.appendChild(h);
+
+    const body = document.createElement('div');
+    body.className = 'round-body';
+
+    roundMatches.forEach(m => {
+      const el = document.createElement('div');
+      el.className = 'match';
+      el.appendChild(renderSlot(m, 'top'));
+      el.appendChild(renderSlot(m, 'bottom'));
+      body.appendChild(el);
+    });
+
+    col.appendChild(body);
+    root.appendChild(col);
+  });
+
+  const champ = getChampion(matches);
+  const champEl = document.getElementById('champion-name');
+  if (champ) {
+    champEl.textContent = champ.name + (champ.seed ? ` · No. ${champ.seed}` : '');
+    champEl.classList.remove('tbd');
+  } else {
+    champEl.textContent = 'To Be Determined';
+    champEl.classList.add('tbd');
+  }
+}
+
+function renderSlot(match, which) {
+  const team = which === 'top' ? match.top : match.bottom;
+  const isWinner = match.winner === which;
+  const isLoser  = match.winner && match.winner !== which;
+  const score    = isWinner ? match.score : '';
+
+  const s = document.createElement('div');
+  s.className = 'slot'
+    + (team ? '' : ' tbd')
+    + (isWinner ? ' winner' : '')
+    + (isLoser && team ? ' loser' : '')
+    + (team ? ' clickable' : '');
+
+  const seed = document.createElement('span');
+  seed.className = 'seed';
+  seed.textContent = team ? team.seed : '';
+  s.appendChild(seed);
+
+  const name = document.createElement('span');
+  name.className = 'team';
+  name.textContent = team ? team.name : 'TBD';
+  s.appendChild(name);
+
+  if (isWinner && score) {
+    const sc = document.createElement('span');
+    sc.className = 'match-score';
+    sc.textContent = score;
+    s.appendChild(sc);
+  }
+
+  if (team) {
+    s.addEventListener('click', () => onSlotClick(match, which));
+  }
+  return s;
+}
+
+// Click-to-advance: admin only
+function onSlotClick(match, which) {
+  if (!isAdmin) return;
+  const team = which === 'top' ? match.top : match.bottom;
+  if (!team) return;
+
+  if (adminResults[match.id] === team.seed) {
+    delete adminResults[match.id];
+  } else {
+    adminResults[match.id] = team.seed;
+  }
+  saveAdminResults();
+  rerender();
+}
+
+// ── DATA LOAD ─────────────────────────────────────────────────
+async function loadFromSheet(url) {
+  const bust = url.includes('?') ? '&' : '?';
+  const res = await fetch(url + bust + 't=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('Sheet fetch failed: ' + res.status);
+  const text = await res.text();
+  const rows = parseCSV(text);
+  const objs = rowsToObjects(rows);
+
+  const teamRows = objs.filter(o => o.seed && o.name);
+  const resultRows = objs.filter(o => o.match_id && o.winner);
+
+  let teams;
+  if (teamRows.length === 32) {
+    teams = teamRows.map(r => ({ seed: parseInt(r.seed, 10), name: r.name })).sort((a,b) => a.seed - b.seed);
+  } else {
+    teams = FALLBACK_TEAMS.slice();
+  }
+  return { teams, results: resultRows };
+}
+
+// ── ADMIN STATE ───────────────────────────────────────────────
+const ADMIN_USERNAME = "proshop";
+const ADMIN_PASSWORD = "mttam";
+const LS_LOGIN   = "lazz_admin_login";
+const LS_RESULTS = "lazz_admin_results";
+
+let isAdmin = false;
+let adminResults = {};  // { M1: seedNumber, ... }
+
+// Cached state from latest run() so rerender() can work without refetching
+let latestTeams = FALLBACK_TEAMS.slice();
+let latestSheetResults = [];
+let latestSheetMap = {};
+
+function loadAdminState() {
+  isAdmin = localStorage.getItem(LS_LOGIN) === "true";
+  try { adminResults = JSON.parse(localStorage.getItem(LS_RESULTS) || "{}"); }
+  catch { adminResults = {}; }
+  document.body.classList.toggle('admin', isAdmin);
+  document.getElementById('admin-bar').hidden = !isAdmin;
+  document.getElementById('admin-link').textContent = isAdmin ? 'Exit Admin' : 'Pro Shop Login';
+}
+function saveAdminResults() { localStorage.setItem(LS_RESULTS, JSON.stringify(adminResults)); }
+
+function login(u, p) {
+  if (u === ADMIN_USERNAME && p === ADMIN_PASSWORD) {
+    localStorage.setItem(LS_LOGIN, "true");
+    loadAdminState();
+    return true;
+  }
+  return false;
+}
+function logout() {
+  localStorage.removeItem(LS_LOGIN);
+  loadAdminState();
+}
+
+// Re-resolve & re-render without refetching the sheet
+function rerender() {
+  if (latestTeams.length !== 32) return;
+  const { matches, sheetMap } = resolveBracket(latestTeams, latestSheetResults, adminResults);
+  latestSheetMap = sheetMap;
+  render(matches);
+}
+
+// Build the paste-ready sheet sync block
+function generateSyncText() {
+  if (latestTeams.length !== 32) return '';
+  const { matches } = resolveBracket(latestTeams, latestSheetResults, adminResults);
+  const lines = [];
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const seed = adminResults[m.id];
+    if (seed != null && m.top && m.top.seed === seed)         lines.push('top');
+    else if (seed != null && m.bottom && m.bottom.seed === seed) lines.push('bottom');
+    else if (latestSheetMap[m.id] && latestSheetMap[m.id].winner) lines.push(latestSheetMap[m.id].winner);
+    else lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// ── MAIN RUN ──────────────────────────────────────────────────
+async function run() {
+  const pill = document.getElementById('status-pill');
+  const bracketEl = document.getElementById('bracket');
+  document.getElementById('hero-year').textContent = `${TOURNAMENT_SUBTITLE} · ${TOURNAMENT_YEAR}`;
+
+  latestTeams = FALLBACK_TEAMS.slice();
+  latestSheetResults = [];
+  let statusText = 'Unofficial · bracket draft';
+
+  if (SHEET_CSV_URL) {
+    try {
+      pill.textContent = 'Loading bracket…';
+      const data = await loadFromSheet(SHEET_CSV_URL);
+      latestTeams = data.teams;
+      latestSheetResults = data.results;
+      statusText = 'Live · synced from Pro Shop';
+      pill.classList.remove('error');
+    } catch (err) {
+      console.error(err);
+      pill.textContent = 'Could not load live bracket — showing last draft';
+      pill.classList.add('error');
+    }
+  } else {
+    pill.textContent = 'Preview mode · connect Google Sheet in index.html';
+  }
+
+  if (latestTeams.length !== 32) {
+    bracketEl.innerHTML = '<div class="error-box">Bracket requires exactly 32 teams (got ' + latestTeams.length + ').</div>';
+    return;
+  }
+
+  rerender();
+
+  if (SHEET_CSV_URL && !pill.classList.contains('error')) pill.textContent = statusText;
+
+  const now = new Date();
+  document.getElementById('last-updated').textContent =
+    'Updated ' + now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+    ' at ' + now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// ── WIRING ────────────────────────────────────────────────────
+document.getElementById('refresh-btn').addEventListener('click', run);
+
+const loginModal  = document.getElementById('login-modal');
+const syncModal   = document.getElementById('sync-modal');
+const loginError  = document.getElementById('login-error');
+
+function openModal(m)  { m.hidden = false;  document.body.style.overflow = 'hidden'; }
+function closeModal(m) { m.hidden = true;   document.body.style.overflow = ''; }
+
+document.getElementById('admin-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  if (isAdmin) { logout(); rerender(); }
+  else { loginError.hidden = true; openModal(loginModal); document.getElementById('login-user').focus(); }
+});
+
+document.getElementById('login-cancel').addEventListener('click', () => closeModal(loginModal));
+document.getElementById('login-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const u = document.getElementById('login-user').value.trim();
+  const p = document.getElementById('login-pass').value;
+  if (login(u, p)) {
+    closeModal(loginModal);
+    document.getElementById('login-user').value = '';
+    document.getElementById('login-pass').value = '';
+    rerender();
+  } else {
+    loginError.hidden = false;
+  }
+});
+
+document.getElementById('admin-logout').addEventListener('click', () => { logout(); rerender(); });
+document.getElementById('admin-reset').addEventListener('click', () => {
+  if (!confirm('Clear all admin picks? (The Google Sheet is not affected.)')) return;
+  adminResults = {};
+  saveAdminResults();
+  rerender();
+});
+document.getElementById('admin-sync').addEventListener('click', () => {
+  document.getElementById('sync-textarea').value = generateSyncText();
+  openModal(syncModal);
+});
+document.getElementById('sync-close').addEventListener('click', () => closeModal(syncModal));
+document.getElementById('sync-copy').addEventListener('click', async () => {
+  const ta = document.getElementById('sync-textarea');
+  try { await navigator.clipboard.writeText(ta.value); }
+  catch { ta.select(); document.execCommand('copy'); }
+  const btn = document.getElementById('sync-copy');
+  const prev = btn.textContent; btn.textContent = 'Copied ✓';
+  setTimeout(() => btn.textContent = prev, 1500);
+});
+
+// Click outside modal closes it; Esc closes too.
+[loginModal, syncModal].forEach(m => {
+  m.addEventListener('click', (e) => { if (e.target === m) closeModal(m); });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeModal(loginModal); closeModal(syncModal); }
+});
+
+loadAdminState();
+run();
+</script>
+</body>
+</html>
