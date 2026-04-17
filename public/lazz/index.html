@@ -744,6 +744,7 @@ function buildInitialBracket(teams) {
   }
   for (let r = 1; r <= 4; r++) {
     const count = 16 / Math.pow(2, r);
+    const startIdx = matches.length;
     for (let i = 0; i < count; i++) {
       matches.push({
         id: `M${matches.length+1}`,
@@ -752,8 +753,8 @@ function buildInitialBracket(teams) {
         bottom: null,
         winner: null,
         score: '',
-        feedTop: matches.length - count * 2 + (i * 2),
-        feedBottom: matches.length - count * 2 + (i * 2 + 1)
+        feedTop: startIdx - count * 2 + (i * 2),
+        feedBottom: startIdx - count * 2 + (i * 2 + 1)
       });
     }
   }
