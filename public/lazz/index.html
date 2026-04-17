@@ -558,7 +558,7 @@
   <span class="admin-badge">Admin Mode</span>
   <span class="admin-hint">Click a team to advance them. Click a winner to undo.</span>
   <button class="admin-btn primary" id="admin-sync" type="button">Sync to Google Sheet</button>
-  <button class="admin-btn danger" id="admin-reset" type="button">Clear picks</button>
+
   <button class="admin-btn" id="admin-logout" type="button">Logout</button>
 </div>
 
@@ -1197,12 +1197,7 @@ document.getElementById('login-form').addEventListener('submit', (e) => {
 });
 
 document.getElementById('admin-logout').addEventListener('click', () => { logout(); rerender(); });
-document.getElementById('admin-reset').addEventListener('click', () => {
-  if (!confirm('Clear all admin picks? (The Google Sheet is not affected.)')) return;
-  adminResults = {};
-  saveAdminResults();
-  rerender();
-});
+
 document.getElementById('admin-sync').addEventListener('click', () => {
   document.getElementById('sync-textarea').value = generateSyncText();
   openModal(syncModal);
