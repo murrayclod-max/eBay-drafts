@@ -572,13 +572,14 @@
   </div>
 </div>
 
-<div id="sync-modal" class="modal-backdrop" hidden>
-  <div class="modal-card wide">
+<div id="sync-modal" class="modal-backdrop" hidden onclick="if(event.target===this){this.hidden=true;document.body.style.overflow=''}">
+  <div class="modal-card wide" style="position:relative">
+    <button type="button" onclick="document.getElementById('sync-modal').hidden=true;document.body.style.overflow=''" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:24px;cursor:pointer;color:#666;line-height:1">&times;</button>
     <h3>Sync to Google Sheet</h3>
     <p>Select all text below, copy it, then in your Google Sheet click cell <code>D34</code> and paste. This fills the <code>winner</code> column for all 31 matches at once.</p>
     <textarea id="sync-textarea" readonly></textarea>
     <div class="modal-actions">
-      <button type="button" class="modal-btn" id="sync-close">Close</button>
+      <button type="button" class="modal-btn" id="sync-close" onclick="document.getElementById('sync-modal').hidden=true;document.body.style.overflow=''">Close</button>
       <button type="button" class="modal-btn primary" id="sync-copy">Copy to clipboard</button>
     </div>
   </div>
