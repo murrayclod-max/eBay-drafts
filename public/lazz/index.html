@@ -518,6 +518,19 @@
     cursor: pointer;
   }
   .admin-link:hover { color: var(--mc-green); border-color: var(--mc-green); }
+  .hero-login {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    border-bottom-color: rgba(255,255,255,0.3);
+    cursor: pointer;
+  }
+  .hero-login:hover { color: #fff; border-bottom-color: rgba(255,255,255,0.6); }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 720px) {
@@ -554,6 +567,7 @@
     <h1>The Lazz</h1>
     <div class="hero-sub" id="hero-year">Meadow Club · Team Match Play</div>
   </div>
+  <div class="admin-link hero-login" data-admin-link>Pro Shop Login</div>
   <div class="hero-pennant"></div>
 </header>
 
@@ -587,7 +601,7 @@
   <span class="dot">·</span>
   <span>Est. 1927</span>
   <span class="dot">·</span>
-  <span class="admin-link" id="admin-link">Pro Shop Login</span>
+  <span class="admin-link" id="admin-link" data-admin-link>Pro Shop Login</span>
 </footer>
 
 <div id="login-modal" class="modal-backdrop" hidden>
@@ -1064,7 +1078,9 @@ function loadAdminState() {
   catch { adminResults = {}; }
   document.body.classList.toggle('admin', isAdmin);
   document.getElementById('admin-bar').hidden = !isAdmin;
-  document.getElementById('admin-link').textContent = isAdmin ? 'Exit Admin' : 'Pro Shop Login';
+  document.querySelectorAll('[data-admin-link]').forEach(el => {
+    el.textContent = isAdmin ? 'Exit Admin' : 'Pro Shop Login';
+  });
 }
 function saveAdminResults() { localStorage.setItem(LS_RESULTS, JSON.stringify(adminResults)); }
 
@@ -1157,10 +1173,12 @@ const loginError  = document.getElementById('login-error');
 function openModal(m)  { m.hidden = false;  document.body.style.overflow = 'hidden'; }
 function closeModal(m) { m.hidden = true;   document.body.style.overflow = ''; }
 
-document.getElementById('admin-link').addEventListener('click', (e) => {
-  e.preventDefault();
-  if (isAdmin) { logout(); rerender(); }
-  else { loginError.hidden = true; openModal(loginModal); document.getElementById('login-user').focus(); }
+document.querySelectorAll('[data-admin-link]').forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (isAdmin) { logout(); rerender(); }
+    else { loginError.hidden = true; openModal(loginModal); document.getElementById('login-user').focus(); }
+  });
 });
 
 document.getElementById('login-cancel').addEventListener('click', () => closeModal(loginModal));
