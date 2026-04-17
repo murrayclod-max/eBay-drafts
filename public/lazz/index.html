@@ -220,6 +220,28 @@
     position: relative;
   }
   .match:hover { border-color: var(--mc-green-accent); box-shadow: 0 2px 12px rgba(26,77,58,0.08); }
+  .match-schedule {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 12px;
+    color: var(--mc-ink-soft);
+    text-align: center;
+    padding: 3px 8px 5px;
+    letter-spacing: 0.03em;
+    border-top: 1px solid var(--mc-rule-soft);
+  }
+  .match-schedule input {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 12px;
+    color: var(--mc-ink);
+    text-align: center;
+    border: 1px solid var(--mc-rule);
+    border-radius: 2px;
+    padding: 2px 6px;
+    width: 90%;
+    background: var(--mc-paper);
+  }
+  .match-schedule input:focus { outline: none; border-color: var(--mc-green-accent); }
+  .match-schedule input::placeholder { color: var(--mc-ink-soft); opacity: 0.6; }
 
   .slot {
     display: flex;
@@ -736,8 +758,13 @@ function resolveBracket(teams, sheetResults, adminSeedResults) {
   const matches = buildInitialBracket(teams);
   const sheetMap = {};
   (sheetResults || []).forEach(r => {
-    if (r.match_id && (r.winner === 'top' || r.winner === 'bottom')) {
-      sheetMap[r.match_id] = { winner: r.winner, score: r.score || '' };
+    if (r.match_id) {
+      sheetMap[r.match_id] = sheetMap[r.match_id] || {};
+      if (r.winner === 'top' || r.winner === 'bottom') {
+        sheetMap[r.match_id].winner = r.winner;
+        sheetMap[r.match_id].score = r.score || '';
+      }
+      if (r.schedule) sheetMap[r.match_id].schedule = r.schedule;
     }
   });
 
@@ -756,8 +783,8 @@ function resolveBracket(teams, sheetResults, adminSeedResults) {
       if (m.bottom && m.bottom.seed === adminSeed) { m.winner = 'bottom'; continue; }
     }
     const sr = sheetMap[m.id];
-    if (sr) { m.winner = sr.winner; m.score = sr.score; }
-    else    { m.winner = null; m.score = ''; }
+    if (sr) { m.winner = sr.winner || null; m.score = sr.score || ''; m.schedule = sr.schedule || ''; }
+    else    { m.winner = null; m.score = ''; m.schedule = ''; }
   }
   return { matches, sheetMap };
 }
@@ -793,6 +820,26 @@ function render(matches) {
       el.className = 'match';
       el.appendChild(renderSlot(m, 'top'));
       el.appendChild(renderSlot(m, 'bottom'));
+      // Schedule field for R16 and later (round >= 1)
+      if (rIdx >= 1) {
+        const sched = document.createElement('div');
+        sched.className = 'match-schedule';
+        if (isAdmin) {
+          const inp = document.createElement('input');
+          inp.type = 'text';
+          inp.placeholder = 'Date / Time';
+          inp.value = m.schedule || '';
+          let debounce;
+          inp.addEventListener('input', () => {
+            clearTimeout(debounce);
+            debounce = setTimeout(() => syncSchedule(m.id, inp.value), 600);
+          });
+          sched.appendChild(inp);
+        } else if (m.schedule) {
+          sched.textContent = m.schedule;
+        }
+        if (isAdmin || m.schedule) el.appendChild(sched);
+      }
       body.appendChild(el);
     });
 
@@ -882,6 +929,19 @@ async function syncToSheet(matchId, winner) {
   }
 }
 
+async function syncSchedule(matchId, schedule) {
+  try {
+    const res = await fetch('/lazz/api/update-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matchId, schedule, password: ADMIN_PASSWORD })
+    });
+    if (!res.ok) console.error('Schedule sync failed:', await res.text());
+  } catch (err) {
+    console.error('Schedule sync error:', err);
+  }
+}
+
 // ── DATA LOAD ─────────────────────────────────────────────────
 async function loadFromSheet(url) {
   const bust = url.includes('?') ? '&' : '?';
@@ -892,7 +952,7 @@ async function loadFromSheet(url) {
   const objs = rowsToObjects(rows);
 
   const teamRows = objs.filter(o => o.seed && o.name);
-  const resultRows = objs.filter(o => o.match_id && o.winner);
+  const resultRows = objs.filter(o => o.match_id && (o.winner || o.schedule));
 
   let teams;
   if (teamRows.length === 32) {

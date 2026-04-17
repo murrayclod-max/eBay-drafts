@@ -139,6 +139,32 @@ app.post('/lazz/api/clear-winner', async (req, res) => {
   }
 });
 
+// POST /lazz/api/update-schedule — admin sets a match date/time
+app.post('/lazz/api/update-schedule', async (req, res) => {
+  const { matchId, schedule, password } = req.body;
+  if (password !== (process.env.LAZZ_ADMIN_PASSWORD || 'mttam')) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  const matchNum = parseInt((matchId || '').replace('M', ''), 10);
+  if (isNaN(matchNum) || matchNum < 1 || matchNum > 31) {
+    return res.status(400).json({ error: 'Invalid matchId (M1–M31)' });
+  }
+  const row = 33 + matchNum;
+  try {
+    const sheets = getSheetsClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: LAZZ_SHEET_ID,
+      range: `F${row}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[schedule || '']] },
+    });
+    res.json({ ok: true, matchId, schedule, row });
+  } catch (err) {
+    console.error('Sheets API error:', err.message);
+    res.status(500).json({ error: 'Failed to update schedule' });
+  }
+});
+
 // ─── eBay Sold Listings Search ────────────────────────────────────────────────
 
 async function searchSoldListings(query, limit = 20) {
