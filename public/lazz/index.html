@@ -853,13 +853,33 @@ function onSlotClick(match, which) {
   const team = which === 'top' ? match.top : match.bottom;
   if (!team) return;
 
-  if (adminResults[match.id] === team.seed) {
+  const isUndo = adminResults[match.id] === team.seed;
+  if (isUndo) {
     delete adminResults[match.id];
   } else {
     adminResults[match.id] = team.seed;
   }
   saveAdminResults();
   rerender();
+
+  // Auto-sync to Google Sheet
+  syncToSheet(match.id, isUndo ? null : which);
+}
+
+async function syncToSheet(matchId, winner) {
+  try {
+    const endpoint = winner ? '/lazz/api/update-winner' : '/lazz/api/clear-winner';
+    const body = { matchId, password: ADMIN_PASSWORD };
+    if (winner) body.winner = winner;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) console.error('Sync failed:', await res.text());
+  } catch (err) {
+    console.error('Sync error:', err);
+  }
 }
 
 // ── DATA LOAD ─────────────────────────────────────────────────

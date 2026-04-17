@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const heicConvert = require('heic-convert');
 const sharp = require('sharp');
+const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -67,6 +68,76 @@ const requireAuth = (req, res, next) => {
   }
   res.redirect('/');
 };
+
+// ─── Lazz Bracket — Google Sheets API ─────────────────────────────────────────
+
+const LAZZ_SHEET_ID = process.env.LAZZ_SHEET_ID || '1-18DEo78ttbH_-hVmNC-vuq_PW62qJ6Dv3Zogc2eWh8';
+
+function getSheetsClient() {
+  const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '{}');
+  const auth = new google.auth.GoogleAuth({
+    credentials: creds,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  return google.sheets({ version: 'v4', auth });
+}
+
+// POST /lazz/api/update-winner — admin sets a match winner
+app.post('/lazz/api/update-winner', async (req, res) => {
+  const { matchId, winner, password } = req.body;
+  // Simple auth check (same password as the client-side admin)
+  if (password !== (process.env.LAZZ_ADMIN_PASSWORD || 'mttam')) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  if (!matchId || !winner) {
+    return res.status(400).json({ error: 'matchId and winner required' });
+  }
+  // Match IDs are M1–M31, stored in rows 34–64, column D (winner) and E (score)
+  const matchNum = parseInt(matchId.replace('M', ''), 10);
+  if (isNaN(matchNum) || matchNum < 1 || matchNum > 31) {
+    return res.status(400).json({ error: 'Invalid matchId (M1–M31)' });
+  }
+  const row = 33 + matchNum; // M1 → row 34, M2 → row 35, etc.
+  try {
+    const sheets = getSheetsClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: LAZZ_SHEET_ID,
+      range: `D${row}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[winner]] },
+    });
+    res.json({ ok: true, matchId, winner, row });
+  } catch (err) {
+    console.error('Sheets API error:', err.message);
+    res.status(500).json({ error: 'Failed to update sheet' });
+  }
+});
+
+// POST /lazz/api/clear-winner — admin clears a match winner
+app.post('/lazz/api/clear-winner', async (req, res) => {
+  const { matchId, password } = req.body;
+  if (password !== (process.env.LAZZ_ADMIN_PASSWORD || 'mttam')) {
+    return res.status(403).json({ error: 'Unauthorized' });
+  }
+  const matchNum = parseInt((matchId || '').replace('M', ''), 10);
+  if (isNaN(matchNum) || matchNum < 1 || matchNum > 31) {
+    return res.status(400).json({ error: 'Invalid matchId (M1–M31)' });
+  }
+  const row = 33 + matchNum;
+  try {
+    const sheets = getSheetsClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: LAZZ_SHEET_ID,
+      range: `D${row}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [['']] },
+    });
+    res.json({ ok: true, matchId, row });
+  } catch (err) {
+    console.error('Sheets API error:', err.message);
+    res.status(500).json({ error: 'Failed to clear winner' });
+  }
+});
 
 // ─── eBay Sold Listings Search ────────────────────────────────────────────────
 
