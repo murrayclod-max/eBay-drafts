@@ -541,6 +541,27 @@
     .seed { width: 20px; font-size: 9px; }
   }
 
+  /* ── SYNC TOAST ── */
+  .sync-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    padding: 10px 18px;
+    border-radius: 4px;
+    color: #fff;
+    z-index: 2000;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+  }
+  .sync-toast.show { opacity: 1; transform: translateY(0); }
+  .sync-toast.ok { background: var(--mc-green); }
+  .sync-toast.fail { background: #a6392e; }
+
   /* Print (Pro Shop wants a hard copy) */
   @media print {
     .hero, footer, .status-bar, .champion-strip { background: #fff !important; color: #000 !important; }
@@ -631,6 +652,8 @@
     </div>
   </div>
 </div>
+
+<div id="sync-toast" class="sync-toast"></div>
 
 <script>
 /* ─────────────────────────────────────────────────────────────
@@ -962,6 +985,14 @@ function onSlotClick(match, which) {
   syncToSheet(match.id, isUndo ? null : which);
 }
 
+function showToast(msg, ok) {
+  const t = document.getElementById('sync-toast');
+  t.textContent = msg;
+  t.className = 'sync-toast ' + (ok ? 'ok' : 'fail') + ' show';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), ok ? 2000 : 4000);
+}
+
 async function syncToSheet(matchId, winner) {
   try {
     const endpoint = winner ? '/lazz/api/update-winner' : '/lazz/api/clear-winner';
@@ -972,9 +1003,16 @@ async function syncToSheet(matchId, winner) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    if (!res.ok) console.error('Sync failed:', await res.text());
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('Sync failed:', res.status, errText);
+      showToast('Sync failed — ' + (res.status === 403 ? 'wrong password' : 'server error'), false);
+      return;
+    }
+    showToast('Synced ' + matchId, true);
   } catch (err) {
     console.error('Sync error:', err);
+    showToast('Sync failed — network error', false);
   }
 }
 
@@ -1031,9 +1069,15 @@ async function syncSchedule(matchId, schedule) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ matchId, schedule, password: ADMIN_PASSWORD })
     });
-    if (!res.ok) console.error('Schedule sync failed:', await res.text());
+    if (!res.ok) {
+      console.error('Schedule sync failed:', res.status, await res.text());
+      showToast('Schedule sync failed', false);
+      return;
+    }
+    showToast('Schedule saved', true);
   } catch (err) {
     console.error('Schedule sync error:', err);
+    showToast('Schedule sync failed — network error', false);
   }
 }
 

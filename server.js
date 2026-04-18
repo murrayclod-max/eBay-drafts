@@ -106,10 +106,11 @@ app.post('/lazz/api/update-winner', async (req, res) => {
       valueInputOption: 'RAW',
       requestBody: { values: [[winner]] },
     });
+    console.log(`[Lazz] Updated ${matchId} → ${winner} (row ${row})`);
     res.json({ ok: true, matchId, winner, row });
   } catch (err) {
-    console.error('Sheets API error:', err.message);
-    res.status(500).json({ error: 'Failed to update sheet' });
+    console.error('Sheets API error:', err.message, err.response?.data?.error);
+    res.status(500).json({ error: 'Failed to update sheet: ' + err.message });
   }
 });
 
@@ -132,10 +133,11 @@ app.post('/lazz/api/clear-winner', async (req, res) => {
       valueInputOption: 'RAW',
       requestBody: { values: [['']] },
     });
+    console.log(`[Lazz] Cleared ${matchId} (row ${row})`);
     res.json({ ok: true, matchId, row });
   } catch (err) {
-    console.error('Sheets API error:', err.message);
-    res.status(500).json({ error: 'Failed to clear winner' });
+    console.error('Sheets API error:', err.message, err.response?.data?.error);
+    res.status(500).json({ error: 'Failed to clear winner: ' + err.message });
   }
 });
 
@@ -158,10 +160,11 @@ app.post('/lazz/api/update-schedule', async (req, res) => {
       valueInputOption: 'RAW',
       requestBody: { values: [[schedule || '']] },
     });
+    console.log(`[Lazz] Schedule ${matchId} → "${schedule}" (row ${row})`);
     res.json({ ok: true, matchId, schedule, row });
   } catch (err) {
-    console.error('Sheets API error:', err.message);
-    res.status(500).json({ error: 'Failed to update schedule' });
+    console.error('Sheets API error:', err.message, err.response?.data?.error);
+    res.status(500).json({ error: 'Failed to update schedule: ' + err.message });
   }
 });
 
@@ -731,4 +734,25 @@ app.post('/save-draft', requireAuth, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`DraftIt running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`DraftIt running on port ${PORT}`);
+  // Verify Google Sheets connection on startup
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const sheets = getSheetsClient();
+      sheets.spreadsheets.values.get({
+        spreadsheetId: LAZZ_SHEET_ID,
+        range: 'A1:F1',
+      }).then(r => {
+        console.log('[Lazz] Google Sheets connected OK. Headers:', r.data.values?.[0]);
+      }).catch(err => {
+        console.error('[Lazz] Google Sheets connection FAILED:', err.message);
+        if (err.response?.data?.error) console.error('[Lazz] Details:', JSON.stringify(err.response.data.error));
+      });
+    } catch (err) {
+      console.error('[Lazz] Could not initialize Sheets client:', err.message);
+    }
+  } else {
+    console.log('[Lazz] GOOGLE_SERVICE_ACCOUNT_JSON not set — Sheets sync disabled');
+  }
+});
