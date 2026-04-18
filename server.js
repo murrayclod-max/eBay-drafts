@@ -82,6 +82,24 @@ function getSheetsClient() {
   return google.sheets({ version: 'v4', auth });
 }
 
+// GET /lazz/api/health — diagnostic check for Sheets connection
+app.get('/lazz/api/health', async (req, res) => {
+  const hasEnv = !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!hasEnv) return res.json({ ok: false, error: 'GOOGLE_SERVICE_ACCOUNT_JSON env var not set' });
+  try {
+    const parsed = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    if (!parsed.client_email) return res.json({ ok: false, error: 'JSON missing client_email', keys: Object.keys(parsed) });
+    const sheets = getSheetsClient();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: LAZZ_SHEET_ID,
+      range: 'A1:F1',
+    });
+    res.json({ ok: true, headers: result.data.values?.[0], sheetId: LAZZ_SHEET_ID, email: parsed.client_email });
+  } catch (err) {
+    res.json({ ok: false, error: err.message, details: err.response?.data?.error });
+  }
+});
+
 // POST /lazz/api/update-winner — admin sets a match winner
 app.post('/lazz/api/update-winner', async (req, res) => {
   const { matchId, winner, password } = req.body;
