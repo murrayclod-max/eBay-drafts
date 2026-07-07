@@ -723,7 +723,7 @@ app.post('/save-draft', requireAuth, async (req, res) => {
           shipToLocationAvailability: { quantity: 1 }
         }
       },
-      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' } }
     );
 
     // Step 2: Create unpublished offer (= draft listing)
@@ -738,7 +738,7 @@ app.post('/save-draft', requireAuth, async (req, res) => {
         },
         listingDescription: description,
       },
-      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' } }
     );
 
     res.json({ ok: true, sku, offerId: offerRes.data.offerId });
