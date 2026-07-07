@@ -14,6 +14,20 @@ const { google } = require('googleapis');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── Claude model ────────────────────────────────────────────────────────────
+// Fable 5 has thinking always on: responses include a thinking block before the
+// text block, and thinking consumes the max_tokens budget. So we (a) extract the
+// text block by type rather than reading content[0], and (b) run these extraction
+// tasks at low effort with generous max_tokens headroom.
+const CLAUDE_MODEL = 'claude-fable-5';
+
+// Pull the assistant's text out of a Messages response, skipping thinking blocks.
+// Returns '' on a refusal (empty/partial content) so callers fail gracefully.
+function claudeText(res) {
+  const block = (res.content || []).find(b => b.type === 'text');
+  return block ? block.text.trim() : '';
+}
+
 // ─── eBay Environment (sandbox vs production) ────────────────────────────────
 const EBAY_ENV = (process.env.EBAY_ENV || 'production').toLowerCase();
 const EBAY_URLS = EBAY_ENV === 'sandbox' ? {
@@ -186,53 +200,81 @@ app.post('/lazz/api/update-schedule', async (req, res) => {
   }
 });
 
-// ─── eBay Sold Listings Search ────────────────────────────────────────────────
+// ─── eBay Application Token (for Browse API / public searches) ───────────────
 
-async function searchSoldListings(query, limit = 20) {
+let cachedAppToken = { token: null, expiresAt: 0 };
+
+async function getAppToken() {
+  if (cachedAppToken.token && Date.now() < cachedAppToken.expiresAt) {
+    return cachedAppToken.token;
+  }
   const clientId = process.env.EBAY_CLIENT_ID;
-  if (!clientId) return null;
+  const clientSecret = process.env.EBAY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
 
   try {
-    // Use eBay Finding API — findCompletedItems (sold listings)
+    const res = await axios.post(
+      `${EBAY_URLS.api}/identity/v1/oauth2/token`,
+      'grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope',
+      {
+        auth: { username: clientId, password: clientSecret },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
+    );
+    cachedAppToken = {
+      token: res.data.access_token,
+      expiresAt: Date.now() + (res.data.expires_in - 300) * 1000,
+    };
+    return cachedAppToken.token;
+  } catch (err) {
+    console.error('App token fetch failed:', err.response?.data || err.message);
+    return null;
+  }
+}
+
+// ─── eBay Listings Search (Browse API — active listings) ─────────────────────
+
+async function searchSoldListings(query, limit = 20) {
+  const token = await getAppToken();
+  if (!token) return null;
+
+  try {
     const params = new URLSearchParams({
-      'OPERATION-NAME': 'findCompletedItems',
-      'SERVICE-VERSION': '1.13.0',
-      'SECURITY-APPNAME': clientId,
-      'RESPONSE-DATA-FORMAT': 'JSON',
-      'REST-PAYLOAD': '',
-      'keywords': query,
-      'itemFilter(0).name': 'SoldItemsOnly',
-      'itemFilter(0).value': 'true',
-      'itemFilter(1).name': 'ListingType',
-      'itemFilter(1).value(0)': 'FixedPrice',
-      'itemFilter(1).value(1)': 'AuctionWithBIN',
-      'itemFilter(1).value(2)': 'Auction',
-      'sortOrder': 'EndTimeSoonest',
-      'paginationInput.entriesPerPage': String(limit),
+      q: query,
+      limit: String(limit),
+      sort: 'price',
+      filter: 'buyingOptions:{FIXED_PRICE|AUCTION|BEST_OFFER},conditions:{NEW|USED|UNSPECIFIED}',
     });
 
     const res = await axios.get(
-      `${EBAY_URLS.finding}/services/search/FindingService/v1?${params}`
+      `${EBAY_URLS.api}/buy/browse/v1/item_summary/search?${params}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US',
+          'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country%3DUS%2Czip%3D19104',
+        },
+      }
     );
 
-    const root = res.data?.findCompletedItemsResponse?.[0];
-    if (!root || root.ack?.[0] !== 'Success') return null;
-
-    const items = root.searchResult?.[0]?.item || [];
-    return items.map(item => ({
-      title: item.title?.[0] || '',
-      price: parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0),
-      shippingCost: parseFloat(item.shippingInfo?.[0]?.shippingServiceCost?.[0]?.__value__ || 0),
-      totalPrice: parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0)
-                + parseFloat(item.shippingInfo?.[0]?.shippingServiceCost?.[0]?.__value__ || 0),
-      condition: item.condition?.[0]?.conditionDisplayName?.[0] || '',
-      listingType: item.listingInfo?.[0]?.listingType?.[0] || '',
-      endDate: item.listingInfo?.[0]?.endTime?.[0] || '',
-      url: item.viewItemURL?.[0] || '',
-      imageUrl: item.galleryURL?.[0] || '',
-    }));
+    const items = res.data?.itemSummaries || [];
+    return items.map(item => {
+      const price = parseFloat(item.price?.value || 0);
+      const ship = parseFloat(item.shippingOptions?.[0]?.shippingCost?.value || 0);
+      return {
+        title: item.title || '',
+        price,
+        shippingCost: ship,
+        totalPrice: price + ship,
+        condition: item.condition || 'Unspecified',
+        listingType: (item.buyingOptions || []).includes('FIXED_PRICE') ? 'FixedPrice' : 'Auction',
+        endDate: item.itemEndDate || '',
+        url: item.itemWebUrl || '',
+        imageUrl: item.image?.imageUrl || item.thumbnailImages?.[0]?.imageUrl || '',
+      };
+    }).filter(i => i.price > 0);
   } catch (err) {
-    console.error('eBay sold search error:', err.message);
+    console.error('eBay Browse search error:', err.response?.data || err.message);
     return null;
   }
 }
@@ -275,6 +317,42 @@ function computeMarketStats(soldItems) {
       imageUrl: i.imageUrl,
     })),
   };
+}
+
+// ─── Photo Processing (HEIC→JPEG, resize, persist) ──────────────────────────
+
+async function processPhoto(photo) {
+  let imageBuffer = fs.readFileSync(photo.path);
+  let mimeType = photo.mimetype || 'image/jpeg';
+
+  const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif'
+    || photo.originalname.toLowerCase().endsWith('.heic')
+    || photo.originalname.toLowerCase().endsWith('.heif');
+
+  if (isHeic) {
+    const converted = await heicConvert({ buffer: imageBuffer, format: 'JPEG', quality: 0.85 });
+    imageBuffer = Buffer.from(converted);
+    mimeType = 'image/jpeg';
+  }
+
+  imageBuffer = await sharp(imageBuffer)
+    .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 82 })
+    .toBuffer();
+
+  // Always persist as .jpg (overwriting HEIC if necessary) so the gallery and
+  // eBay image URLs serve a format browsers/eBay can actually render.
+  const base = path.basename(photo.path, path.extname(photo.path));
+  const jpegPath = path.join(path.dirname(photo.path), `${base}.jpg`);
+  fs.writeFileSync(jpegPath, imageBuffer);
+  if (jpegPath !== photo.path) {
+    try { fs.unlinkSync(photo.path); } catch {}
+    photo.filename = `${base}.jpg`;
+    photo.path = jpegPath;
+    photo.mimetype = 'image/jpeg';
+  }
+
+  return { buffer: imageBuffer, mimeType: 'image/jpeg' };
 }
 
 // ─── eBay Token Helpers ───────────────────────────────────────────────────────
@@ -397,34 +475,10 @@ app.post('/generate', requireAuth, upload.array('photos', 10), async (req, res) 
     const isFreeShipping = freeShipping === 'true' || freeShipping === true;
 
     for (const photo of photos) {
-      let imageBuffer = fs.readFileSync(photo.path);
-      let mimeType = photo.mimetype || 'image/jpeg';
-
-      // Convert HEIC/HEIF to JPEG (iPhone default format)
-      const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif'
-        || photo.originalname.toLowerCase().endsWith('.heic')
-        || photo.originalname.toLowerCase().endsWith('.heif');
-
-      if (isHeic) {
-        const converted = await heicConvert({ buffer: imageBuffer, format: 'JPEG', quality: 0.85 });
-        imageBuffer = Buffer.from(converted);
-        mimeType = 'image/jpeg';
-      }
-
-      // Resize to max 1024px — keeps quality good for AI analysis, shrinks file dramatically
-      imageBuffer = await sharp(imageBuffer)
-        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toBuffer();
-      mimeType = 'image/jpeg';
-
+      const { buffer, mimeType } = await processPhoto(photo);
       content.push({
         type: 'image',
-        source: {
-          type: 'base64',
-          media_type: mimeType,
-          data: imageBuffer.toString('base64'),
-        }
+        source: { type: 'base64', media_type: mimeType, data: buffer.toString('base64') }
       });
     }
 
@@ -445,11 +499,12 @@ app.post('/generate', requireAuth, upload.array('photos', 10), async (req, res) 
     let marketStats = null;
     try {
       const idRes = await client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 200,
+        model: CLAUDE_MODEL,
+        max_tokens: 1024,
+        output_config: { effort: 'low' },
         messages: [{ role: 'user', content: idContent }]
       });
-      const idText = idRes.content[0].text.trim();
+      const idText = claudeText(idRes);
       let parsed;
       try { parsed = JSON.parse(idText); } catch { const m = idText.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); }
 
@@ -457,15 +512,15 @@ app.post('/generate', requireAuth, upload.array('photos', 10), async (req, res) 
         const soldItems = await searchSoldListings(parsed.searchQuery);
         marketStats = computeMarketStats(soldItems);
         if (marketStats) {
-          marketContext = `\n\nMARKET DATA from recent eBay sold listings for "${parsed.searchQuery}":
-- ${marketStats.count} recent sales found
-- Price range: $${marketStats.low.toFixed(2)} – $${marketStats.high.toFixed(2)} (including shipping)
-- Average sold price: $${marketStats.average.toFixed(2)}
-- Median sold price: $${marketStats.median.toFixed(2)}
+          marketContext = `\n\nMARKET DATA from current eBay active listings for "${parsed.searchQuery}":
+- ${marketStats.count} active listings found
+- Asking price range: $${marketStats.low.toFixed(2)} – $${marketStats.high.toFixed(2)} (including shipping)
+- Average asking price: $${marketStats.average.toFixed(2)}
+- Median asking price: $${marketStats.median.toFixed(2)}
 - Lowest Buy It Now (with shipping): $${marketStats.lowBuyItNow.toFixed(2)}
-Recent sales: ${marketStats.recentSales.map(s => `"${s.title}" $${s.totalPrice.toFixed(2)}`).join('; ')}
+Similar listings: ${marketStats.recentSales.map(s => `"${s.title}" $${s.totalPrice.toFixed(2)}`).join('; ')}
 
-USE THIS DATA to set a competitive, realistic price. Your suggested price should be informed by these actual sales.`;
+These are ASKING prices, not sold prices. Sold prices typically 70-90% of asking. Set a competitive price using this data as a ceiling.`;
         }
       }
     } catch (err) {
@@ -520,13 +575,14 @@ Respond with ONLY valid JSON — no markdown, no code blocks, nothing else:
     });
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      output_config: { effort: 'low' },
       messages: [{ role: 'user', content }]
     });
 
     let listing;
-    const text = response.content[0].text.trim();
+    const text = claudeText(response);
     try {
       listing = JSON.parse(text);
     } catch {
@@ -556,28 +612,10 @@ app.post('/valuate', requireAuth, upload.array('photos', 10), async (req, res) =
     const content = [];
 
     for (const photo of photos) {
-      let imageBuffer = fs.readFileSync(photo.path);
-      let mimeType = photo.mimetype || 'image/jpeg';
-
-      const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif'
-        || photo.originalname.toLowerCase().endsWith('.heic')
-        || photo.originalname.toLowerCase().endsWith('.heif');
-
-      if (isHeic) {
-        const converted = await heicConvert({ buffer: imageBuffer, format: 'JPEG', quality: 0.85 });
-        imageBuffer = Buffer.from(converted);
-        mimeType = 'image/jpeg';
-      }
-
-      imageBuffer = await sharp(imageBuffer)
-        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toBuffer();
-      mimeType = 'image/jpeg';
-
+      const { buffer, mimeType } = await processPhoto(photo);
       content.push({
         type: 'image',
-        source: { type: 'base64', media_type: mimeType, data: imageBuffer.toString('base64') }
+        source: { type: 'base64', media_type: mimeType, data: buffer.toString('base64') }
       });
     }
 
@@ -599,13 +637,14 @@ Respond with ONLY valid JSON:
     });
 
     const identifyRes = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 500,
+      model: CLAUDE_MODEL,
+      max_tokens: 1500,
+      output_config: { effort: 'low' },
       messages: [{ role: 'user', content }]
     });
 
     let identification;
-    const idText = identifyRes.content[0].text.trim();
+    const idText = claudeText(identifyRes);
     try {
       identification = JSON.parse(idText);
     } catch {
@@ -624,16 +663,18 @@ Respond with ONLY valid JSON:
       type: 'text',
       text: `You are an expert eBay seller and appraiser. You identified this item as: "${identification.itemName}" in ${identification.condition} condition.
 
-${marketStats ? `Here are recent eBay sold listings for comparable items:
-- ${marketStats.count} sales found
-- Price range: $${marketStats.low.toFixed(2)} – $${marketStats.high.toFixed(2)} (including shipping)
-- Average sold price: $${marketStats.average.toFixed(2)}
-- Median sold price: $${marketStats.median.toFixed(2)}
+${marketStats ? `Here are current eBay active listings for comparable items (asking prices, not sold):
+- ${marketStats.count} active listings found
+- Asking price range: $${marketStats.low.toFixed(2)} – $${marketStats.high.toFixed(2)} (including shipping)
+- Average asking price: $${marketStats.average.toFixed(2)}
+- Median asking price: $${marketStats.median.toFixed(2)}
 - Lowest Buy It Now (with shipping): $${marketStats.lowBuyItNow.toFixed(2)}
 
-Recent comparable sales:
+Similar active listings:
 ${marketStats.recentSales.map(s => `• "${s.title}" — $${s.price.toFixed(2)} + $${s.shippingCost.toFixed(2)} shipping (${s.condition}, ${s.listingType})`).join('\n')}
-` : 'No eBay sold data available — provide your best estimate based on expertise.'}
+
+NOTE: These are asking prices, not actual sold prices. Sold prices are typically 70-90% of asking prices. Factor this into your valuation — quote-sale should be at the low end of asking prices (or below), fair value around 75-85% of median asking, top dollar near the median asking for best comps.
+` : 'No eBay market data available — provide your best estimate based on expertise.'}
 
 Based on ${marketStats ? 'the market data above and ' : ''}your expertise, provide a valuation.
 
@@ -653,13 +694,14 @@ Respond with ONLY valid JSON:
     });
 
     const valuationRes = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 800,
+      model: CLAUDE_MODEL,
+      max_tokens: 2000,
+      output_config: { effort: 'low' },
       messages: [{ role: 'user', content: valuationPrompt }]
     });
 
     let valuation;
-    const valText = valuationRes.content[0].text.trim();
+    const valText = claudeText(valuationRes);
     try {
       valuation = JSON.parse(valText);
     } catch {
