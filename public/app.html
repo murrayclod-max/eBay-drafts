@@ -20,6 +20,21 @@
     <a id="ebay-connect-link" href="/ebay/connect" class="btn-connect" style="display:none">Connect eBay</a>
   </div>
 
+  <!-- Nav tabs + Local/eBay draft-store toggle -->
+  <nav class="app-nav">
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-view="upload">➕ New Listing</button>
+      <button class="nav-tab" data-view="drafts">📋 My Drafts <span id="drafts-count" class="count-badge" style="display:none">0</span></button>
+    </div>
+    <div class="draft-mode" title="Where your drafts are stored">
+      <span class="mode-label">Drafts:</span>
+      <div class="mode-switch">
+        <button class="mode-opt active" data-mode="local">Local</button>
+        <button class="mode-opt disabled" data-mode="api" disabled title="Pending eBay Listing API approval">eBay 🔒</button>
+      </div>
+    </div>
+  </nav>
+
   <!-- ─── STEP 1: Upload ─────────────────────────────────── -->
   <main id="step-upload">
     <div class="card">
@@ -162,25 +177,58 @@
 
     <div class="save-section">
       <div id="save-error" class="error-msg" style="display:none"></div>
-      <button id="save-btn" class="btn-primary">Save to eBay Drafts</button>
+      <button id="save-btn" class="btn-primary">💾 Save to My Drafts</button>
     </div>
 
   </main>
 
-  <!-- ─── STEP 3: Success ───────────────────────────────── -->
+  <!-- ─── STEP 3: Success (saved locally) ───────────────── -->
   <main id="step-success" style="display:none">
     <div class="card success-card">
-      <span class="success-icon">✅</span>
-      <h2>Saved to Drafts!</h2>
-      <p>Your listing is waiting in eBay as an unpublished draft. Nothing is live yet.</p>
-      <a href="https://www.ebay.com/sh/lst/drafts" target="_blank" class="btn-outline">
-        View in eBay Seller Hub
-      </a>
-      <button id="list-another-btn" class="btn-primary">
-        List Another Item
-      </button>
+      <span class="success-icon">💾</span>
+      <h2>Saved to My Drafts</h2>
+      <p>Your listing is stored in the app. Review or publish it any time from My Drafts.</p>
+      <button id="view-drafts-btn" class="btn-outline">📋 View My Drafts</button>
+      <button id="list-another-btn" class="btn-primary">List Another Item</button>
     </div>
   </main>
+
+  <!-- ─── STEP 4: Published (live) ───────────────────────── -->
+  <main id="step-published" style="display:none">
+    <div class="card success-card">
+      <span class="success-icon">🎉</span>
+      <h2>Listed Live on eBay!</h2>
+      <p>Your item is now a live listing in your Seller Hub.</p>
+      <a id="published-link" href="#" target="_blank" class="btn-outline">View Live Listing</a>
+      <button id="published-drafts-btn" class="btn-primary">Back to My Drafts</button>
+    </div>
+  </main>
+
+  <!-- ─── My Drafts ──────────────────────────────────────── -->
+  <main id="step-drafts" style="display:none">
+    <div class="card">
+      <h2>My Drafts</h2>
+      <p class="drafts-sub">Stored locally in the app — edit, delete, or publish live to eBay.</p>
+      <div id="drafts-empty" class="drafts-empty" style="display:none">
+        No drafts yet. Create one from <b>New Listing</b>.
+      </div>
+      <div id="drafts-list" class="drafts-list"></div>
+    </div>
+  </main>
+
+  <!-- ─── Publish confirm dialog ─────────────────────────── -->
+  <div id="publish-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h3>Publish live to eBay?</h3>
+      <p>This creates a <b>real, live listing</b> that buyers can purchase. eBay fees apply. This is not a draft.</p>
+      <div id="publish-modal-title" class="modal-item"></div>
+      <div id="publish-modal-error" class="error-msg" style="display:none"></div>
+      <div class="modal-actions">
+        <button id="publish-cancel" class="btn-ghost">Cancel</button>
+        <button id="publish-confirm" class="btn-primary">List it live</button>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
