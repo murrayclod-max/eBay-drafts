@@ -25,6 +25,15 @@ const CLAUDE_MODEL = 'claude-sonnet-5';
 // user-facing listing/valuation text. Haiku doesn't support output_config.effort.
 const FAST_MODEL = 'claude-haiku-4-5';
 
+// ─── Durable storage dir (Railway volume) ────────────────────────────────────
+// Local drafts + uploaded photos live here so they survive redeploys. On Railway
+// the volume is mounted at RAILWAY_VOLUME_MOUNT_PATH (/data); locally, cwd.
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  || (process.env.TOKENS_PATH ? path.dirname(process.env.TOKENS_PATH) : '.');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+const DRAFTS_FILE = path.join(DATA_DIR, 'drafts.json');
+try { fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
+
 // Pull the assistant's text out of a Messages response, skipping thinking blocks.
 // Returns '' on a refusal (empty/partial content) so callers fail gracefully.
 function claudeText(res) {
@@ -48,8 +57,8 @@ console.log(`eBay environment: ${EBAY_ENV}`);
 // File upload storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    fs.mkdirSync('uploads', { recursive: true });
-    cb(null, 'uploads');
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    cb(null, UPLOADS_DIR);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
@@ -71,7 +80,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(session({
   secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
   resave: false,
@@ -783,7 +792,7 @@ app.post('/save-draft', requireAuth, async (req, res) => {
     };
 
     const imageUrls = (photoFiles || [])
-      .filter(f => f && fs.existsSync(path.join('uploads', f)))
+      .filter(f => f && fs.existsSync(path.join(UPLOADS_DIR, f)))
       .map(f => `${appUrl}/uploads/${f}`);
 
     // Step 1: Create inventory item
@@ -828,6 +837,41 @@ app.post('/save-draft', requireAuth, async (req, res) => {
     console.error('Save draft error:', err.response?.data || err.message);
     res.status(500).json({ error: msg });
   }
+});
+
+// ─── Local Drafts (stored on the volume; independent of eBay) ─────────────────
+function readDrafts() {
+  try { return JSON.parse(fs.readFileSync(DRAFTS_FILE, 'utf8')); } catch { return []; }
+}
+function writeDrafts(list) {
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+  fs.writeFileSync(DRAFTS_FILE, JSON.stringify(list, null, 2));
+}
+
+app.get('/drafts', requireAuth, (req, res) => res.json(readDrafts()));
+
+app.post('/drafts', requireAuth, (req, res) => {
+  const list = readDrafts();
+  const draft = { id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now(), status: 'draft', ...req.body };
+  list.unshift(draft);
+  writeDrafts(list);
+  res.json(draft);
+});
+
+app.put('/drafts/:id', requireAuth, (req, res) => {
+  const list = readDrafts();
+  const i = list.findIndex(d => d.id === req.params.id);
+  if (i === -1) return res.status(404).json({ error: 'Draft not found' });
+  list[i] = { ...list[i], ...req.body, id: list[i].id, createdAt: list[i].createdAt, updatedAt: Date.now() };
+  writeDrafts(list);
+  res.json(list[i]);
+});
+
+app.delete('/drafts/:id', requireAuth, (req, res) => {
+  const list = readDrafts();
+  const next = list.filter(d => d.id !== req.params.id);
+  writeDrafts(next);
+  res.json({ ok: true, deleted: list.length - next.length });
 });
 
 app.listen(PORT, () => {
