@@ -436,6 +436,35 @@ app.get('/ebay/status', requireAuth, async (req, res) => {
   res.json({ connected: !!token });
 });
 
+// Publish-readiness check: does the account have the business policies + a
+// ship-from location that publishOffer requires to create a live listing?
+app.get('/ebay/readiness', requireAuth, async (req, res) => {
+  const token = await getAccessToken();
+  if (!token) return res.status(401).json({ error: 'eBay not connected' });
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const MP = 'EBAY_US';
+  const get = async (url) => {
+    try { return (await axios.get(`${EBAY_URLS.api}${url}`, { headers: H })).data; }
+    catch (e) { return { _error: e.response?.status, _detail: e.response?.data?.errors?.[0]?.message || e.message }; }
+  };
+  const [pay, ret, ful, loc] = await Promise.all([
+    get(`/sell/account/v1/payment_policy?marketplace_id=${MP}`),
+    get(`/sell/account/v1/return_policy?marketplace_id=${MP}`),
+    get(`/sell/account/v1/fulfillment_policy?marketplace_id=${MP}`),
+    get(`/sell/inventory/v1/location`),
+  ]);
+  const n = (d, k) => d?._error ? `err ${d._error}` : (Array.isArray(d?.[k]) ? d[k].length : 0);
+  res.json({
+    paymentPolicies: n(pay, 'paymentPolicies'),
+    returnPolicies: n(ret, 'returnPolicies'),
+    fulfillmentPolicies: n(ful, 'fulfillmentPolicies'),
+    locations: n(loc, 'locations'),
+    errors: {
+      pay: pay?._detail, ret: ret?._detail, ful: ful?._detail, loc: loc?._detail,
+    },
+  });
+});
+
 app.get('/ebay/connect', requireAuth, (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.EBAY_CLIENT_ID,
