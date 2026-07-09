@@ -15,11 +15,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── Claude model ────────────────────────────────────────────────────────────
-// Fable 5 has thinking always on: responses include a thinking block before the
-// text block, and thinking consumes the max_tokens budget. So we (a) extract the
-// text block by type rather than reading content[0], and (b) run these extraction
-// tasks at low effort with generous max_tokens headroom.
-const CLAUDE_MODEL = 'claude-fable-5';
+// Sonnet 5 for the user-facing listing/valuation text: ~8s and clean JSON, vs
+// Fable 5's 18–40s (which timed out at the proxy on slow requests). Responses may
+// include a thinking block before the text block, so we extract the text block by
+// type via claudeText() rather than reading content[0].
+const CLAUDE_MODEL = 'claude-sonnet-5';
 // Fast/cheap model for throwaway internal steps (extracting an eBay search query
 // from an item). Keeps /generate + /valuate snappy — Fable 5 is reserved for the
 // user-facing listing/valuation text. Haiku doesn't support output_config.effort.
