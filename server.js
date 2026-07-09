@@ -403,7 +403,9 @@ async function getAccessToken() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       }
     );
-    saveTokens(res.data);
+    // eBay's refresh response has no refresh_token — preserve the existing one,
+    // else the next refresh has nothing to use and the connection dies.
+    saveTokens({ ...tokens, ...res.data });
     return res.data.access_token;
   } catch (err) {
     console.error('Token refresh failed:', err.response?.data);
