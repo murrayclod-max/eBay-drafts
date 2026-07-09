@@ -445,7 +445,7 @@ app.get('/ebay/readiness', requireAuth, async (req, res) => {
   const MP = 'EBAY_US';
   const get = async (url) => {
     try { return (await axios.get(`${EBAY_URLS.api}${url}`, { headers: H })).data; }
-    catch (e) { return { _error: e.response?.status, _detail: e.response?.data?.errors?.[0]?.message || e.message }; }
+    catch (e) { return { _error: e.response?.status, _full: e.response?.data || e.message }; }
   };
   const [pay, ret, ful, loc] = await Promise.all([
     get(`/sell/account/v1/payment_policy?marketplace_id=${MP}`),
@@ -459,8 +459,8 @@ app.get('/ebay/readiness', requireAuth, async (req, res) => {
     returnPolicies: n(ret, 'returnPolicies'),
     fulfillmentPolicies: n(ful, 'fulfillmentPolicies'),
     locations: n(loc, 'locations'),
-    errors: {
-      pay: pay?._detail, ret: ret?._detail, ful: ful?._detail, loc: loc?._detail,
+    rawErrors: {
+      pay: pay?._full, ret: ret?._full, ful: ful?._full, loc: loc?._full,
     },
   });
 });
