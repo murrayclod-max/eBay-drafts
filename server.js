@@ -950,10 +950,27 @@ app.post('/publish', requireAuth, async (req, res) => {
     } catch (e) { console.error('category resolution failed:', e.response?.data || e.message); }
     if (!categoryId) return res.status(400).json({ error: 'Could not determine an eBay category for this item.' });
 
+    // Fill any REQUIRED item specifics for this category (Brand, etc.) via Haiku
+    let aspects;
+    try {
+      const appTok = await getAppToken();
+      const aResp = (await axios.get(`${EBAY_URLS.api}/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=${categoryId}`,
+        { headers: { Authorization: `Bearer ${appTok}` } })).data;
+      const required = (aResp.aspects || []).filter(a => a.aspectConstraint?.aspectRequired).map(a => a.localizedAspectName);
+      if (required.length) {
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const ar = await anthropic.messages.create({ model: FAST_MODEL, max_tokens: 500, messages: [{ role: 'user',
+          content: `eBay item: "${title}". ${description}\n\nGive values for these eBay item specifics as ONLY valid JSON (keys = specific names, values = short strings). If unknown, use "Unbranded" for Brand or "Does Not Apply":\n${JSON.stringify(required)}` }] });
+        let txt = claudeText(ar), parsed;
+        try { parsed = JSON.parse(txt); } catch { const m = txt.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); }
+        if (parsed) { aspects = {}; for (const k of required) aspects[k] = [String(parsed[k] || 'Does Not Apply')]; }
+      }
+    } catch (e) { console.error('aspect fill failed:', e.response?.data || e.message); }
+
     const sku = `DRAFTIT-${Date.now()}`;
     const conditionMap = { NEW:'NEW', LIKE_NEW:'LIKE_NEW', USED_EXCELLENT:'USED_EXCELLENT', USED_GOOD:'USED_GOOD', USED_ACCEPTABLE:'USED_ACCEPTABLE', FOR_PARTS:'FOR_PARTS_OR_NOT_WORKING' };
     await axios.put(`${EBAY_URLS.api}/sell/inventory/v1/inventory_item/${sku}`, {
-      product: { title, description, imageUrls },
+      product: { title, description, imageUrls, ...(aspects && { aspects }) },
       condition: conditionMap[condition] || 'USED_GOOD', conditionDescription: conditionNote || '',
       availability: { shipToLocationAvailability: { quantity: 1 } },
     }, { headers: H });
