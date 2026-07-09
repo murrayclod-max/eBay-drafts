@@ -20,6 +20,10 @@ const PORT = process.env.PORT || 3000;
 // text block by type rather than reading content[0], and (b) run these extraction
 // tasks at low effort with generous max_tokens headroom.
 const CLAUDE_MODEL = 'claude-fable-5';
+// Fast/cheap model for throwaway internal steps (extracting an eBay search query
+// from an item). Keeps /generate + /valuate snappy — Fable 5 is reserved for the
+// user-facing listing/valuation text. Haiku doesn't support output_config.effort.
+const FAST_MODEL = 'claude-haiku-4-5';
 
 // Pull the assistant's text out of a Messages response, skipping thinking blocks.
 // Returns '' on a refusal (empty/partial content) so callers fail gracefully.
@@ -504,9 +508,8 @@ app.post('/generate', requireAuth, upload.array('photos', 10), async (req, res) 
     let marketStats = null;
     try {
       const idRes = await client.messages.create({
-        model: CLAUDE_MODEL,
+        model: FAST_MODEL,
         max_tokens: 1024,
-        output_config: { effort: 'low' },
         messages: [{ role: 'user', content: idContent }]
       });
       const idText = claudeText(idRes);
@@ -642,9 +645,8 @@ Respond with ONLY valid JSON:
     });
 
     const identifyRes = await client.messages.create({
-      model: CLAUDE_MODEL,
+      model: FAST_MODEL,
       max_tokens: 1500,
-      output_config: { effort: 'low' },
       messages: [{ role: 'user', content }]
     });
 
