@@ -938,13 +938,16 @@ app.post('/publish', requireAuth, async (req, res) => {
     const imageUrls = (photoFiles || []).filter(f => f && fs.existsSync(path.join(UPLOADS_DIR, f)))
       .map(f => `${(process.env.APP_URL || `http://localhost:${PORT}`)}/uploads/${f}`);
     if (!imageUrls.length) return res.status(400).json({ error: 'eBay requires at least one photo to publish a live listing.' });
-    // Resolve a leaf category from the title
+    // Resolve a leaf category from the title. The taxonomy API needs the base
+    // api_scope, which the user token lacks — use the app (client-credentials) token.
     let categoryId = '';
     try {
-      const treeId = (await get(`/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MP}`)).categoryTreeId;
-      const sugg = await get(`/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(title)}`);
+      const appTok = await getAppToken();
+      const AH = { Authorization: `Bearer ${appTok}` };
+      const treeId = (await axios.get(`${EBAY_URLS.api}/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MP}`, { headers: AH })).data.categoryTreeId;
+      const sugg = (await axios.get(`${EBAY_URLS.api}/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(title)}`, { headers: AH })).data;
       categoryId = sugg.categorySuggestions?.[0]?.category?.categoryId || '';
-    } catch {}
+    } catch (e) { console.error('category resolution failed:', e.response?.data || e.message); }
     if (!categoryId) return res.status(400).json({ error: 'Could not determine an eBay category for this item.' });
 
     const sku = `DRAFTIT-${Date.now()}`;
