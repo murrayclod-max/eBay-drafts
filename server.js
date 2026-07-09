@@ -357,7 +357,11 @@ async function processPhoto(photo) {
 
 // ─── eBay Token Helpers ───────────────────────────────────────────────────────
 
-const TOKENS_FILE = 'ebay_tokens.json';
+// Token file path is configurable so it can live on a durable Railway volume
+// (set TOKENS_PATH=/data/ebay_tokens.json) and survive redeploys. Falls back to
+// a local file when unset (dev / no volume).
+const TOKENS_FILE = process.env.TOKENS_PATH || 'ebay_tokens.json';
+try { fs.mkdirSync(path.dirname(TOKENS_FILE), { recursive: true }); } catch {}
 
 function getTokens() {
   try { return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8')); }
@@ -365,6 +369,7 @@ function getTokens() {
 }
 
 function saveTokens(tokens) {
+  try { fs.mkdirSync(path.dirname(TOKENS_FILE), { recursive: true }); } catch {}
   fs.writeFileSync(TOKENS_FILE, JSON.stringify({ ...tokens, saved_at: Date.now() }));
 }
 
