@@ -41,6 +41,23 @@ function claudeText(res) {
   return block ? block.text.trim() : '';
 }
 
+// Map DraftIt's condition enum to an Inventory-API condition enum that's VALID for
+// the listing category. USED_GOOD/USED_ACCEPTABLE are media grades (5000/6000) that
+// most physical categories reject — remap to the nearest allowed condition.
+const CONDITION_ID = { NEW:1000, LIKE_NEW:2750, USED_EXCELLENT:3000, USED_GOOD:5000, USED_ACCEPTABLE:6000, FOR_PARTS:7000, FOR_PARTS_OR_NOT_WORKING:7000 };
+const ID_TO_ENUM = { 1000:'NEW', 1500:'NEW_OTHER', 2750:'LIKE_NEW', 3000:'USED_EXCELLENT', 4000:'USED_VERY_GOOD', 5000:'USED_GOOD', 6000:'USED_ACCEPTABLE', 7000:'FOR_PARTS_OR_NOT_WORKING' };
+function resolveCondition(draftCond, validIds) {
+  const want = CONDITION_ID[draftCond] || 3000;
+  if (validIds.has(want)) return ID_TO_ENUM[want];
+  let order;
+  if (draftCond === 'NEW') order = [1000, 1500, 2750];
+  else if (draftCond === 'LIKE_NEW') order = [2750, 1500, 3000];
+  else if (draftCond === 'FOR_PARTS') order = [7000, 3000];
+  else order = [3000, 2750, 4000, 5000, 6000]; // any "used" grade
+  const pick = order.find(id => validIds.has(id)) || [3000, 1000, 1500, 7000].find(id => validIds.has(id));
+  return ID_TO_ENUM[pick] || 'USED_EXCELLENT';
+}
+
 // ─── eBay Environment (sandbox vs production) ────────────────────────────────
 const EBAY_ENV = (process.env.EBAY_ENV || 'production').toLowerCase();
 const EBAY_URLS = EBAY_ENV === 'sandbox' ? {
@@ -969,11 +986,20 @@ app.post('/publish', requireAuth, async (req, res) => {
       }
     } catch (e) { console.error('aspect fill failed:', e.response?.data || e.message); }
 
+    // Pick a condition the category actually allows (USED_GOOD is media-only)
+    let ebayCondition = ID_TO_ENUM[CONDITION_ID[condition]] || 'USED_EXCELLENT';
+    try {
+      const appTok = await getAppToken();
+      const cp = (await axios.get(`${EBAY_URLS.api}/sell/metadata/v1/marketplace/${MP}/get_item_condition_policies?filter=categoryIds:{${categoryId}}`,
+        { headers: { Authorization: `Bearer ${appTok}` } })).data;
+      const validIds = new Set((cp.itemConditionPolicies?.[0]?.itemConditions || []).map(c => Number(c.conditionId)));
+      if (validIds.size) ebayCondition = resolveCondition(condition, validIds);
+    } catch (e) { console.error('condition resolve failed:', e.response?.data || e.message); }
+
     const sku = `DRAFTIT-${Date.now()}`;
-    const conditionMap = { NEW:'NEW', LIKE_NEW:'LIKE_NEW', USED_EXCELLENT:'USED_EXCELLENT', USED_GOOD:'USED_GOOD', USED_ACCEPTABLE:'USED_ACCEPTABLE', FOR_PARTS:'FOR_PARTS_OR_NOT_WORKING' };
     await axios.put(`${EBAY_URLS.api}/sell/inventory/v1/inventory_item/${sku}`, {
       product: { title, description, imageUrls, ...(aspects && { aspects }) },
-      condition: conditionMap[condition] || 'USED_GOOD', conditionDescription: conditionNote || '',
+      condition: ebayCondition, conditionDescription: conditionNote || '',
       availability: { shipToLocationAvailability: { quantity: 1 } },
     }, { headers: H });
     const offer = await axios.post(`${EBAY_URLS.api}/sell/inventory/v1/offer`, {
