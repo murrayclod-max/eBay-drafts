@@ -474,6 +474,48 @@ app.get('/ebay/readiness', requireAuth, async (req, res) => {
   });
 });
 
+// One-time seller setup: create default business policies + a ship-from location
+// so publishOffer can create live listings. Idempotent-ish (reports per-item).
+app.post('/ebay/setup-selling', requireAuth, async (req, res) => {
+  const token = await getAccessToken();
+  if (!token) return res.status(401).json({ error: 'eBay not connected' });
+  const { postalCode, city, stateOrProvince, countryCode = 'US' } = req.body;
+  if (!postalCode) return res.status(400).json({ error: 'postalCode (ship-from ZIP) required' });
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' };
+  const MP = 'EBAY_US';
+  const CT = [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }];
+  const out = {};
+  const post = async (label, url, body, idKey) => {
+    try {
+      const r = await axios.post(`${EBAY_URLS.api}${url}`, body, { headers: H });
+      out[label] = { ok: true, id: r.data?.[idKey] || 'created' };
+    } catch (e) {
+      out[label] = { ok: false, status: e.response?.status, errors: e.response?.data?.errors };
+    }
+  };
+  await post('payment', '/sell/account/v1/payment_policy',
+    { name: 'DraftIt Default Payment', marketplaceId: MP, categoryTypes: CT, immediatePay: true }, 'paymentPolicyId');
+  await post('return', '/sell/account/v1/return_policy',
+    { name: 'DraftIt Default Returns', marketplaceId: MP, categoryTypes: CT, returnsAccepted: true,
+      returnPeriod: { value: 30, unit: 'DAY' }, refundMethod: 'MONEY_BACK', returnShippingCostPayer: 'BUYER' }, 'returnPolicyId');
+  await post('fulfillment', '/sell/account/v1/fulfillment_policy',
+    { name: 'DraftIt Default Shipping', marketplaceId: MP, categoryTypes: CT, handlingTime: { value: 2, unit: 'DAY' },
+      shippingOptions: [{ optionType: 'DOMESTIC', costType: 'CALCULATED',
+        shippingServices: [{ sortOrder: 1, shippingServiceCode: 'USPSGroundAdvantage', freeShipping: false }] }] }, 'fulfillmentPolicyId');
+  const locKey = 'draftit-loc-1';
+  try {
+    await axios.post(`${EBAY_URLS.api}/sell/inventory/v1/location/${locKey}`,
+      { location: { address: { country: countryCode, postalCode, city, stateOrProvince } },
+        name: 'DraftIt Ship-From', merchantLocationStatus: 'ENABLED', locationTypes: ['WAREHOUSE'] }, { headers: H });
+    out.location = { ok: true, key: locKey };
+  } catch (e) {
+    const st = e.response?.status;
+    out.location = st === 409 ? { ok: true, key: locKey, note: 'already exists' }
+      : { ok: false, status: st, errors: e.response?.data?.errors };
+  }
+  res.json(out);
+});
+
 app.get('/ebay/connect', requireAuth, (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.EBAY_CLIENT_ID,
