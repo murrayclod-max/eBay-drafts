@@ -516,6 +516,26 @@ app.post('/ebay/setup-selling', requireAuth, async (req, res) => {
   res.json(out);
 });
 
+// Create just the shipping (fulfillment) policy — parameterized so the service
+// code / cost type can be tuned without redeploying. Location must exist first.
+app.post('/ebay/create-shipping-policy', requireAuth, async (req, res) => {
+  const token = await getAccessToken();
+  if (!token) return res.status(401).json({ error: 'not connected' });
+  const { serviceCode = 'USPSGroundAdvantage', costType = 'CALCULATED', cost = '6.00', name = 'DraftIt Shipping' } = req.body;
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' };
+  const svc = { sortOrder: 1, shippingCarrierCode: 'USPS', shippingServiceCode: serviceCode };
+  if (costType === 'FLAT_RATE') { svc.freeShipping = false; svc.shippingCost = { value: String(cost), currency: 'USD' }; }
+  const body = {
+    name, marketplaceId: 'EBAY_US', categoryTypes: [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }],
+    handlingTime: { value: 2, unit: 'DAY' },
+    shippingOptions: [{ optionType: 'DOMESTIC', costType, shippingServices: [svc] }],
+  };
+  try {
+    const r = await axios.post(`${EBAY_URLS.api}/sell/account/v1/fulfillment_policy`, body, { headers: H });
+    res.json({ ok: true, id: r.data.fulfillmentPolicyId, name });
+  } catch (e) { res.json({ ok: false, status: e.response?.status, errors: e.response?.data?.errors }); }
+});
+
 app.get('/ebay/connect', requireAuth, (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.EBAY_CLIENT_ID,
