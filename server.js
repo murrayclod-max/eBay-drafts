@@ -683,9 +683,8 @@ Respond with ONLY valid JSON — no markdown, no code blocks, nothing else:
     });
 
     const response = await client.messages.create({
-      model: CLAUDE_MODEL,
+      model: FAST_MODEL,
       max_tokens: 3000,
-      output_config: { effort: 'low' },
       messages: [{ role: 'user', content }]
     });
 
@@ -801,9 +800,8 @@ Respond with ONLY valid JSON:
     });
 
     const valuationRes = await client.messages.create({
-      model: CLAUDE_MODEL,
+      model: FAST_MODEL,
       max_tokens: 2000,
-      output_config: { effort: 'low' },
       messages: [{ role: 'user', content: valuationPrompt }]
     });
 
@@ -898,6 +896,63 @@ app.post('/save-draft', requireAuth, async (req, res) => {
       || err.message;
     console.error('Save draft error:', err.response?.data || err.message);
     res.status(500).json({ error: msg });
+  }
+});
+
+// ─── Publish a listing LIVE to eBay (inventory item → offer → publish) ────────
+app.post('/publish', requireAuth, async (req, res) => {
+  const token = await getAccessToken();
+  if (!token) return res.status(401).json({ error: 'eBay not connected', needsConnect: true });
+  const { title, condition, conditionNote, price, description, photoFiles } = req.body;
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Language': 'en-US' };
+  const MP = 'EBAY_US';
+  const get = async (u) => (await axios.get(`${EBAY_URLS.api}${u}`, { headers: H })).data;
+  try {
+    const [pay, ret, ful, locs] = await Promise.all([
+      get(`/sell/account/v1/payment_policy?marketplace_id=${MP}`),
+      get(`/sell/account/v1/return_policy?marketplace_id=${MP}`),
+      get(`/sell/account/v1/fulfillment_policy?marketplace_id=${MP}`),
+      get(`/sell/inventory/v1/location`),
+    ]);
+    const paymentPolicyId = pay.paymentPolicies?.[0]?.paymentPolicyId;
+    const returnPolicyId = ret.returnPolicies?.[0]?.returnPolicyId;
+    const fulfillmentPolicyId = ful.fulfillmentPolicies?.[0]?.fulfillmentPolicyId;
+    const merchantLocationKey = locs.locations?.[0]?.merchantLocationKey;
+    if (!paymentPolicyId || !returnPolicyId || !fulfillmentPolicyId || !merchantLocationKey) {
+      return res.status(400).json({ error: 'eBay selling setup incomplete — missing a business policy or location.' });
+    }
+    const imageUrls = (photoFiles || []).filter(f => f && fs.existsSync(path.join(UPLOADS_DIR, f)))
+      .map(f => `${(process.env.APP_URL || `http://localhost:${PORT}`)}/uploads/${f}`);
+    if (!imageUrls.length) return res.status(400).json({ error: 'eBay requires at least one photo to publish a live listing.' });
+    // Resolve a leaf category from the title
+    let categoryId = '';
+    try {
+      const treeId = (await get(`/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=${MP}`)).categoryTreeId;
+      const sugg = await get(`/commerce/taxonomy/v1/category_tree/${treeId}/get_category_suggestions?q=${encodeURIComponent(title)}`);
+      categoryId = sugg.categorySuggestions?.[0]?.category?.categoryId || '';
+    } catch {}
+    if (!categoryId) return res.status(400).json({ error: 'Could not determine an eBay category for this item.' });
+
+    const sku = `DRAFTIT-${Date.now()}`;
+    const conditionMap = { NEW:'NEW', LIKE_NEW:'LIKE_NEW', USED_EXCELLENT:'USED_EXCELLENT', USED_GOOD:'USED_GOOD', USED_ACCEPTABLE:'USED_ACCEPTABLE', FOR_PARTS:'FOR_PARTS_OR_NOT_WORKING' };
+    await axios.put(`${EBAY_URLS.api}/sell/inventory/v1/inventory_item/${sku}`, {
+      product: { title, description, imageUrls },
+      condition: conditionMap[condition] || 'USED_GOOD', conditionDescription: conditionNote || '',
+      availability: { shipToLocationAvailability: { quantity: 1 } },
+    }, { headers: H });
+    const offer = await axios.post(`${EBAY_URLS.api}/sell/inventory/v1/offer`, {
+      sku, marketplaceId: MP, format: 'FIXED_PRICE', availableQuantity: 1, categoryId,
+      listingDescription: description,
+      pricingSummary: { price: { value: String(parseFloat(price) || 9.99), currency: 'USD' } },
+      listingPolicies: { fulfillmentPolicyId, paymentPolicyId, returnPolicyId },
+      merchantLocationKey,
+    }, { headers: H });
+    const offerId = offer.data.offerId;
+    const pub = await axios.post(`${EBAY_URLS.api}/sell/inventory/v1/offer/${offerId}/publish`, {}, { headers: H });
+    res.json({ ok: true, listingId: pub.data.listingId, offerId, url: `https://www.ebay.com/itm/${pub.data.listingId}` });
+  } catch (err) {
+    const errs = err.response?.data?.errors;
+    res.status(500).json({ error: errs?.[0]?.longMessage || errs?.[0]?.message || err.message, errors: errs });
   }
 });
 
