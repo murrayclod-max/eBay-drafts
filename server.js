@@ -932,6 +932,37 @@ app.post('/upload-photos', requireAuth, upload.array('photos', 10), async (req, 
   }
 });
 
+// Upload a local photo to eBay Picture Services (EPS) via the Trading API and
+// return its eBay-hosted URL. Listings must use all-EPS (not self-hosted) images.
+async function uploadToEPS(filename, userToken) {
+  const imgBuf = fs.readFileSync(path.join(UPLOADS_DIR, filename));
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<UploadSiteHostedPicturesRequest xmlns="urn:ebay:apis:eBLBaseComponents"><PictureName>${filename}</PictureName></UploadSiteHostedPicturesRequest>`;
+  const fd = new FormData();
+  fd.append('XML Payload', new Blob([xml], { type: 'text/xml' }));
+  fd.append('image', new Blob([imgBuf], { type: 'image/jpeg' }), filename);
+  const res = await axios.post(`${EBAY_URLS.api}/ws/api.dll`, fd, {
+    headers: {
+      'X-EBAY-API-CALL-NAME': 'UploadSiteHostedPictures',
+      'X-EBAY-API-SITEID': '0',
+      'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+      'X-EBAY-API-IAF-TOKEN': userToken,
+    },
+    maxBodyLength: Infinity,
+  });
+  const m = String(res.data).match(/<FullURL>(.*?)<\/FullURL>/);
+  if (!m) throw new Error('EPS upload: no FullURL in response — ' + String(res.data).slice(0, 300));
+  return m[1];
+}
+
+// Diagnostic: upload one draft photo to EPS and return the eBay URL (no publish).
+app.get('/test-eps', requireAuth, async (req, res) => {
+  const token = await getAccessToken();
+  if (!token) return res.status(401).json({ error: 'not connected' });
+  try { res.json({ ok: true, url: await uploadToEPS(req.query.file, token) }); }
+  catch (e) { res.json({ ok: false, status: e.response?.status, error: e.message, data: String(e.response?.data || '').slice(0, 500) }); }
+});
+
 // ─── Publish a listing LIVE to eBay (inventory item → offer → publish) ────────
 app.post('/publish', requireAuth, async (req, res) => {
   const token = await getAccessToken();
@@ -954,9 +985,11 @@ app.post('/publish', requireAuth, async (req, res) => {
     if (!paymentPolicyId || !returnPolicyId || !fulfillmentPolicyId || !merchantLocationKey) {
       return res.status(400).json({ error: 'eBay selling setup incomplete — missing a business policy or location.' });
     }
-    const imageUrls = (photoFiles || []).filter(f => f && fs.existsSync(path.join(UPLOADS_DIR, f)))
-      .map(f => `${(process.env.APP_URL || `http://localhost:${PORT}`)}/uploads/${f}`);
-    if (!imageUrls.length) return res.status(400).json({ error: 'eBay requires at least one photo to publish a live listing.' });
+    const localFiles = (photoFiles || []).filter(f => f && fs.existsSync(path.join(UPLOADS_DIR, f)));
+    if (!localFiles.length) return res.status(400).json({ error: 'eBay requires at least one photo to publish a live listing.' });
+    let imageUrls = [];
+    try { for (const f of localFiles) imageUrls.push(await uploadToEPS(f, token)); }
+    catch (e) { console.error('EPS upload failed:', e.response?.data || e.message); return res.status(500).json({ error: 'Could not upload photos to eBay: ' + e.message }); }
     // Resolve a leaf category from the title. The taxonomy API needs the base
     // api_scope, which the user token lacks — use the app (client-credentials) token.
     let categoryId = '';
