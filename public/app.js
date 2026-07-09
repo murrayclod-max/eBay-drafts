@@ -42,6 +42,7 @@ function showBanner(text, type, showConnect = false) {
 // ─── Events ───────────────────────────────────────────────────────────────────
 function bindEvents() {
   document.getElementById('photo-input').addEventListener('change', handlePhotoSelect);
+  document.getElementById('add-photo-input').addEventListener('change', handleAddPhotos);
   document.getElementById('generate-btn').addEventListener('click', generateListing);
 
   document.getElementById('r-title').addEventListener('input', function () {
@@ -108,26 +109,64 @@ function handlePhotoSelect(e) {
   document.getElementById('generate-btn').disabled = false;
 }
 
-// ─── Gallery ──────────────────────────────────────────────────────────────────
+// ─── Gallery (with add / remove) ────────────────────────────────────────────────
 function buildGallery() {
-  mainPhotoIndex = 0;
   const mainImg = document.getElementById('gallery-main');
   const thumbsEl = document.getElementById('gallery-thumbs');
+  const noHint = document.getElementById('no-photo-hint');
+  const galHint = document.getElementById('gallery-hint');
   thumbsEl.innerHTML = '';
-  if (!previewUrls.length) { mainImg.src = ''; return; }
-  mainImg.src = previewUrls[0];
+
+  if (!previewUrls.length) {
+    mainImg.src = ''; mainImg.style.display = 'none';
+    noHint.style.display = 'flex'; galHint.style.display = 'none';
+    return;
+  }
+  if (mainPhotoIndex >= previewUrls.length) mainPhotoIndex = 0;
+  mainImg.style.display = 'block';
+  noHint.style.display = 'none'; galHint.style.display = 'block';
+  mainImg.src = previewUrls[mainPhotoIndex];
 
   previewUrls.forEach((url, i) => {
     const div = document.createElement('div');
-    div.className = 'g-thumb' + (i === 0 ? ' g-thumb-active' : '');
-    div.innerHTML = `<img src="${url}" alt="Photo ${i + 1}"><span class="g-main-tag">MAIN</span>`;
-    div.addEventListener('click', () => {
-      mainPhotoIndex = i;
-      mainImg.src = url;
-      document.querySelectorAll('.g-thumb').forEach((t, j) => t.classList.toggle('g-thumb-active', j === i));
-    });
+    div.className = 'g-thumb' + (i === mainPhotoIndex ? ' g-thumb-active' : '');
+    div.innerHTML = `<img src="${url}" alt="Photo ${i + 1}"><span class="g-main-tag">MAIN</span><button class="g-remove" title="Remove photo">✕</button>`;
+    div.querySelector('img').addEventListener('click', () => { mainPhotoIndex = i; buildGallery(); });
+    div.querySelector('.g-remove').addEventListener('click', (e) => { e.stopPropagation(); removePhoto(i); });
     thumbsEl.appendChild(div);
   });
+}
+
+// Add photos to the current listing/draft (uploads to the volume, then appends)
+async function handleAddPhotos(e) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  const status = document.getElementById('add-photo-status');
+  status.textContent = `Uploading ${files.length} photo${files.length > 1 ? 's' : ''}…`;
+  status.style.display = 'block';
+  const fd = new FormData();
+  files.forEach(f => fd.append('photos', f));
+  try {
+    const res = await fetch('/upload-photos', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    if (!currentListing) currentListing = {};
+    if (!Array.isArray(currentListing.photoFiles)) currentListing.photoFiles = [];
+    data.files.forEach(f => { currentListing.photoFiles.push(f); previewUrls.push(`/uploads/${f}`); });
+    buildGallery();
+    status.style.display = 'none';
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    e.target.value = '';
+  }
+}
+
+function removePhoto(i) {
+  previewUrls.splice(i, 1);
+  if (currentListing && Array.isArray(currentListing.photoFiles)) currentListing.photoFiles.splice(i, 1);
+  if (mainPhotoIndex >= previewUrls.length) mainPhotoIndex = Math.max(0, previewUrls.length - 1);
+  buildGallery();
 }
 
 // ─── Generate Listing ─────────────────────────────────────────────────────────
@@ -163,6 +202,7 @@ async function generateListing() {
 }
 
 function populateReview(listing) {
+  mainPhotoIndex = 0;
   document.getElementById('r-title').value = listing.title || '';
   document.getElementById('title-count').textContent = `${(listing.title || '').length}/80`;
   document.getElementById('r-condition').value = listing.condition || 'USED_GOOD';

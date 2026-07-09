@@ -103,12 +103,18 @@
 
       <!-- Left: Photo Gallery -->
       <div class="gallery-col">
-        <div class="main-photo-wrap">
+        <div class="main-photo-wrap" id="main-photo-wrap">
           <img id="gallery-main" src="" alt="Main photo">
           <span class="main-label">MAIN PHOTO</span>
+          <span id="no-photo-hint" class="no-photo-hint" style="display:none">No photos yet</span>
         </div>
         <div id="gallery-thumbs" class="gallery-thumbs"></div>
-        <p class="gallery-hint">Tap a photo to set as main</p>
+        <p class="gallery-hint" id="gallery-hint" style="display:none">Tap a photo to set main · ✕ to remove</p>
+        <label class="add-photos-btn">
+          <input type="file" id="add-photo-input" accept="image/*,.heic,.heif" multiple style="display:none">
+          ➕ Add photos
+        </label>
+        <div id="add-photo-status" class="add-photo-status" style="display:none"></div>
       </div>
 
       <!-- Right: Listing Details -->

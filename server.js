@@ -899,6 +899,20 @@ app.post('/save-draft', requireAuth, async (req, res) => {
   }
 });
 
+// Upload additional photos to an existing draft (processed + stored on the volume)
+app.post('/upload-photos', requireAuth, upload.array('photos', 10), async (req, res) => {
+  try {
+    const files = [];
+    for (const photo of (req.files || [])) {
+      await processPhoto(photo); // HEIC->JPEG, resize, persist; updates photo.filename to .jpg
+      files.push(photo.filename);
+    }
+    res.json({ files });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Photo upload failed' });
+  }
+});
+
 // ─── Publish a listing LIVE to eBay (inventory item → offer → publish) ────────
 app.post('/publish', requireAuth, async (req, res) => {
   const token = await getAccessToken();
